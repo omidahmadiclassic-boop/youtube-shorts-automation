@@ -45,7 +45,6 @@ def main():
         },
         "status": {
             "privacyStatus": "public",
-            "selfDeclaredMadeForKids": False,
         },
     }
     media = MediaFileUpload(
