@@ -1,0 +1,23 @@
+
+name: YouTube Shorts Automation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check automation environment
+        run: |
+          echo "GitHub Actions is running successfully."
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Branch: $GITHUB_REF_NAME"
+          echo "Next step: connect the video production pipeline."
