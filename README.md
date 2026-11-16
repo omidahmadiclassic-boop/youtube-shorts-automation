@@ -5,10 +5,10 @@ A zero-paid-API-cost YouTube Shorts workflow that runs on GitHub Actions cloud r
 ## Daily workflow
 
 - Runs daily at 08:00 Iran Standard Time (04:30 UTC), plus manual dispatch.
-- Checks Google Trends US and recent public YouTube science/nature uploads for relevant science, nature, space, animal, and technology topics.
+- Checks Google Trends US for relevant science, nature, space, animal, and technology topics.
 - Falls back to a rotating evergreen topic list when no suitable fresh trend has a reliable reference.
 - Uses Wikipedia article summaries as a factual research reference and records the selected topic to avoid exact repeats.
-- Creates a vertical Short using Pixabay footage, Edge TTS Aria narration, FFmpeg, and channel graphics.
+- Creates a vertical Short using three Pixabay footage searches, concise Edge TTS Aria neural narration, synchronized burned-in captions, FFmpeg, and channel graphics.
 - Uploads the finished video publicly using the YouTube Data API.
 - Saves the MP4, credits, description, and selected topic as a seven-day workflow artifact.
 
@@ -41,7 +41,7 @@ Open **Actions → Curious World Daily Shorts → Run workflow**. Check the run 
 
 - Topic selection is a free research-and-ranking pipeline with reusable script templates; it does not call a paid generative-AI model or claim to measure YouTube view counts.
 - Google Trends and Wikipedia can be unavailable or return unsuitable results. In that case the workflow uses an unused evergreen topic or stops rather than inventing facts.
-- A trend is not proof that a topic will get views. Titles, clips, and scripts still need periodic quality review.
+- Narration length determines scene pacing, and Edge TTS generates subtitle timing that is burned into the final Short.\n- A trend is not proof that a topic will get views. Titles, clips, and scripts still need periodic quality review.
 - Automatic public upload starts only after all YouTube OAuth secrets are configured.
 - Pixabay clips are selected by search relevance and popularity; review the included source credits and license before relying on any individual asset.
 - GitHub Actions scheduled runs can be delayed by GitHub and may be disabled after prolonged repository inactivity. Check the Actions tab if a scheduled run does not appear.
