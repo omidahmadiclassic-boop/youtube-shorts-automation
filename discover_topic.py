@@ -214,7 +214,47 @@ def main():
 
     topic = selected["topic"]
     title = topic if len(topic) < 65 else topic[:62].rsplit(" ", 1)[0] + "..."
-    query = topic.replace("?", "").replace(":", " ")
+    sentences = re.split(r"(?<=[.!?])\\s+", selected["extract"])
+    # Build a separate visual search phrase from each factual sentence.
+    # Topic keywords anchor every query; sentence keywords distinguish each scene.
+    stop_words = {
+        "about", "after", "also", "because", "being", "between", "could",
+        "during", "first", "from", "have", "into", "more", "most", "often",
+        "other", "over", "some", "such", "than", "that", "their", "there",
+        "these", "they", "this", "those", "through", "under", "using", "very",
+        "were", "when", "where", "which", "while", "with", "would", "your",
+        "the", "and", "for", "are", "was", "were", "its", "has", "had",
+        "not", "but", "can", "may", "one", "two", "how", "why"
+    }
+    def visual_terms(text, limit=5):
+        words = re.findall(r"[A-Za-z][A-Za-z-]{2,}", text.lower())
+        result = []
+        for word in words:
+            if word not in stop_words and word not in result:
+                result.append(word)
+            if len(result) >= limit:
+                break
+        return result
+
+    topic_terms = visual_terms(topic, 3)
+    scene_captions = [
+        title.upper(),
+        "THE SCIENCE BEHIND IT",
+        "WHAT WILL WE DISCOVER NEXT?",
+    ]
+    scenes = []
+    for index in range(3):
+        sentence = sentences[min(index, len(sentences) - 1)] if sentences else topic
+        detail_terms = visual_terms(sentence, 4)
+        # Keep each query short and concrete for Pixabay's tag-based search.
+        terms = list(dict.fromkeys(topic_terms + detail_terms))
+        query = " ".join(terms[:7]) or topic
+        scenes.append({
+            "query": query,
+            "caption": scene_captions[index],
+            "visual_focus": sentence[:220],
+        })
+
     payload = {
         "topic": topic,
         "title": title,
@@ -223,11 +263,7 @@ def main():
         "research_title": selected["research_title"],
         "reference_url": selected["source_url"],
         "narration": make_narration(topic, selected["extract"]),
-        "scenes": [
-            {"query": query, "caption": title.upper()},
-            {"query": query + " documentary close up", "caption": "THE SCIENCE BEHIND IT"},
-            {"query": query + " nature science cinematic", "caption": "WHAT WILL WE DISCOVER NEXT?"},
-        ],
+        "scenes": scenes,
         "selected_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
     OUTPUT_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
