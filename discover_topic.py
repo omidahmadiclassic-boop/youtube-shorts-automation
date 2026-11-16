@@ -9,7 +9,11 @@ import xml.etree.ElementTree as ET
 
 HISTORY_FILE = Path("topic_history.json")
 OUTPUT_FILE = Path("topic.json")
-HEADERS = {"User-Agent": "CuriousWorldTopicResearch/1.0 (educational video project)"}
+HEADERS = {
+    "User-Agent": "CuriousWorldTopicResearch/2.0 (educational YouTube Shorts project; contact: repository owner)"
+}
+SESSION = requests.Session()
+SESSION.headers.update(HEADERS)
 
 EVERGREEN = [
     "Why do cats always land on their feet",
@@ -37,8 +41,9 @@ EVERGREEN = [
 ALLOW = re.compile(
     r"\b(space|planet|earth|moon|mars|nasa|astronomy|science|animal|wildlife|"
     r"ocean|deep sea|nature|weather|climate|invention|technology|robot|"
-    r"artificial intelligence|ai|discovery|physics|biology|human body|"
-    r"brain|dinosaur|fossil|volcano|earthquake|aurora|solar|star|galaxy)\b",
+    r"artificial intelligence|\bai\b|discovery|physics|biology|human body|"
+    r"brain|dinosaur|fossil|volcano|earthquake|aurora|solar|star|galaxy|"
+    r"cat|octopus|bee|shark|tree|butterfly|penguin|dolphin|flamingo|black hole)\b",
     re.I,
 )
 BLOCK = re.compile(
@@ -48,61 +53,103 @@ BLOCK = re.compile(
     re.I,
 )
 
-def get_json(url):
-    response = requests.get(url, headers=HEADERS, timeout=25)
-    response.raise_for_status()
-    return response.json()
+def request_json(url, params=None, attempts=3):
+    last_error = None
+    for attempt in range(attempts):
+        try:
+            response = SESSION.get(url, params=params, timeout=20)
+            if response.status_code == 429 or response.status_code >= 500:
+                wait = min(2 ** attempt, 8)
+                print(f"Temporary HTTP {response.status_code}; retrying in {wait}s.")
+                time.sleep(wait)
+                continue
+            response.raise_for_status()
+            return response.json()
+        except (requests.RequestException, ValueError) as exc:
+            last_error = exc
+            if attempt + 1 < attempts:
+                time.sleep(min(2 ** attempt, 8))
+    if last_error:
+        raise last_error
+    raise RuntimeError("Request failed after retries.")
 
 def history():
     try:
-        return json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
+        data = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {"used": []}
     except (OSError, json.JSONDecodeError):
         return {"used": []}
 
 def wikipedia_summary(topic):
-    url = "https://en.wikipedia.org/api/rest_v1/page/summary/" + quote(topic.replace(" ", "_"))
-    try:
-        data = get_json(url)
-        extract = re.sub(r"\s+", " ", data.get("extract", "")).strip()
-        if len(extract) >= 180 and data.get("type") != "disambiguation":
-            return extract, data.get("content_urls", {}).get("desktop", {}).get("page", "")
-    except Exception as exc:
-        print(f"Wikipedia lookup skipped for {topic!r}: {exc}")
-    return "", ""
+    # Search first and use Wikipedia's canonical page title. This is much more
+    # reliable than sending a full question-style topic to the summary endpoint.
+    search_data = request_json(
+        "https://en.wikipedia.org/w/api.php",
+        params={
+            "action": "query",
+            "list": "search",
+            "srsearch": topic,
+            "format": "json",
+            "srlimit": 5,
+        },
+    )
+    results = search_data.get("query", {}).get("search", [])
+    for result in results:
+        page_title = result.get("title", "").strip()
+        if not page_title:
+            continue
+        try:
+            data = request_json(
+                "https://en.wikipedia.org/api/rest_v1/page/summary/" + quote(page_title.replace(" ", "_"))
+            )
+            extract = re.sub(r"\s+", " ", data.get("extract", "")).strip()
+            if len(extract) >= 180 and data.get("type") != "disambiguation":
+                page_url = (
+                    data.get("content_urls", {}).get("desktop", {}).get("page")
+                    or "https://en.wikipedia.org/wiki/" + quote(page_title.replace(" ", "_"))
+                )
+                return extract, page_url, page_title
+        except Exception as exc:
+            print(f"Skipping Wikipedia result {page_title!r}: {exc}")
+    return "", "", ""
 
 def trends_candidates():
-    url = "https://trends.google.com/trending/rss?geo=US"
-    response = requests.get(url, headers=HEADERS, timeout=25)
-    response.raise_for_status()
-    root = ET.fromstring(response.content)
-    items = []
-    for item in root.findall(".//item"):
-        title = (item.findtext("title") or "").strip()
-        traffic = (item.findtext("{https://trends.google.com/trending/rss}approx_traffic") or "")
-        if not title or BLOCK.search(title) or not ALLOW.search(title):
-            continue
-        items.append({"topic": title, "source": "Google Trends US", "traffic": traffic})
-    return items
-
-def youtube_candidates():
-    # Public YouTube search feed: recent science/nature uploads provide an extra topic signal.
-    url = "https://www.youtube.com/feeds/videos.xml?search_query=science+space+animals+technology"
-    response = requests.get(url, headers=HEADERS, timeout=25)
-    response.raise_for_status()
-    root = ET.fromstring(response.content)
-    atom = "{http://www.w3.org/2005/Atom}"
-    items = []
-    for entry in root.findall(f"{atom}entry"):
-        title = (entry.findtext(f"{atom}title") or "").strip()
-        if not title or BLOCK.search(title) or not ALLOW.search(title):
-            continue
-        items.append({"topic": title, "source": "Recent YouTube science/nature uploads", "traffic": ""})
-    return items
+    # Google has changed its RSS endpoints before. Try both public RSS variants;
+    # failure is non-fatal because the evergreen rotation is always available.
+    urls = [
+        "https://trends.google.com/trending/rss?geo=US",
+        "https://trends.google.com/trends/trendingsearches/daily/rss?geo=US",
+    ]
+    last_error = None
+    for url in urls:
+        try:
+            response = SESSION.get(url, timeout=20)
+            response.raise_for_status()
+            root = ET.fromstring(response.content)
+            items = []
+            for item in root.findall(".//item"):
+                title = (item.findtext("title") or "").strip()
+                if not title or BLOCK.search(title) or not ALLOW.search(title):
+                    continue
+                items.append({
+                    "topic": title,
+                    "source": "Google Trends US",
+                    "traffic": item.findtext("{https://trends.google.com/trending/rss}approx_traffic") or "",
+                })
+            if items:
+                return items
+        except Exception as exc:
+            last_error = exc
+            print(f"Google Trends RSS unavailable ({url}): {exc}")
+    if last_error:
+        print("Continuing with evergreen topics; Google Trends is optional.")
+    return []
 
 def make_narration(topic, extract):
     sentences = re.split(r"(?<=[.!?])\s+", extract)
     facts = " ".join(sentences[:4]).strip()
-    facts = facts[:560].rsplit(" ", 1)[0] if len(facts) > 560 else facts
+    if len(facts) > 560:
+        facts = facts[:560].rsplit(" ", 1)[0]
     return (
         f"What makes {topic} so fascinating? "
         f"{facts} "
@@ -112,62 +159,70 @@ def make_narration(topic, extract):
     )
 
 def main():
-    used = set(x.casefold() for x in history().get("used", []))
+    used = {str(x).casefold() for x in history().get("used", [])}
     candidates = []
+
     try:
         candidates = trends_candidates()
-        print(f"Google Trends supplied {len(candidates)} safe science/nature candidates.")
+        print(f"Google Trends supplied {len(candidates)} relevant candidates.")
     except Exception as exc:
-        print(f"Google Trends unavailable: {exc}")
+        print(f"Trend discovery skipped safely: {exc}")
 
-    try:
-        yt_candidates = youtube_candidates()
-        candidates.extend(yt_candidates)
-        print(f"YouTube recent-upload feed supplied {len(yt_candidates)} additional candidates.")
-    except Exception as exc:
-        print(f"YouTube topic feed unavailable: {exc}")
+    # Do not depend on YouTube's undocumented/public search feed: it may return
+    # HTTP 400. Google Trends is a bonus signal, not a hard requirement.
+    ordered = [
+        (item, "trending") for item in candidates
+        if item["topic"].casefold() not in used
+    ]
+    ordered.extend(
+        (
+            {
+                "topic": topic,
+                "source": "Curious World evergreen research list",
+                "traffic": "",
+            },
+            "evergreen",
+        )
+        for topic in EVERGREEN
+        if topic.casefold() not in used
+    )
 
-    # Prefer a fresh, relevant trend or recent video topic with a usable reference article.
-    for item in candidates[:30]:
+    selected = None
+    for item, kind in ordered:
         topic = item["topic"]
-        if topic.casefold() in used:
+        try:
+            extract, source_url, canonical_title = wikipedia_summary(topic)
+        except Exception as exc:
+            print(f"Research lookup failed for {topic!r}: {exc}")
             continue
-        extract, source_url = wikipedia_summary(topic)
         if extract:
-            item.update({"extract": extract, "source_url": source_url, "kind": "trending"})
+            selected = {
+                **item,
+                "topic": topic,
+                "research_title": canonical_title,
+                "extract": extract,
+                "source_url": source_url,
+                "kind": kind,
+            }
             break
-    else:
-        item = None
 
-    # Mix mode: use a relevant daily trend when available; otherwise rotate evergreen topics.
-    if item is None:
-        for topic in EVERGREEN:
-            if topic.casefold() not in used:
-                extract, source_url = wikipedia_summary(topic)
-                if extract:
-                    item = {
-                        "topic": topic,
-                        "source": "Curious World evergreen research list",
-                        "traffic": "",
-                        "extract": extract,
-                        "source_url": source_url,
-                        "kind": "evergreen",
-                    }
-                    break
+    if selected is None:
+        raise SystemExit(
+            "No topic could be verified from Wikipedia after retries. "
+            "No video was generated; try again later."
+        )
 
-    if item is None:
-        raise SystemExit("Could not find a fresh topic with a usable factual reference. No video was generated.")
-
-    topic = item["topic"]
+    topic = selected["topic"]
     title = topic if len(topic) < 65 else topic[:62].rsplit(" ", 1)[0] + "..."
     query = topic.replace("?", "").replace(":", " ")
     payload = {
         "topic": topic,
         "title": title,
-        "kind": item["kind"],
-        "research_source": item["source"],
-        "reference_url": item["source_url"],
-        "narration": make_narration(topic, item["extract"]),
+        "kind": selected["kind"],
+        "research_source": selected["source"],
+        "research_title": selected["research_title"],
+        "reference_url": selected["source_url"],
+        "narration": make_narration(topic, selected["extract"]),
         "scenes": [
             {"query": query, "caption": title.upper()},
             {"query": query + " documentary close up", "caption": "THE SCIENCE BEHIND IT"},
@@ -181,8 +236,8 @@ def main():
     record.setdefault("used", []).append(topic)
     record["used"] = record["used"][-180:]
     HISTORY_FILE.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"Selected {item['kind']} topic: {topic}")
-    print(f"Research reference: {item['source_url']}")
+    print(f"Selected {selected['kind']} topic: {topic}")
+    print(f"Verified Wikipedia reference: {selected['source_url']}")
 
 if __name__ == "__main__":
     main()
