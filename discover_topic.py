@@ -84,6 +84,21 @@ def trends_candidates():
         items.append({"topic": title, "source": "Google Trends US", "traffic": traffic})
     return items
 
+def youtube_candidates():
+    # Public YouTube search feed: recent science/nature uploads provide an extra topic signal.
+    url = "https://www.youtube.com/feeds/videos.xml?search_query=science+space+animals+technology"
+    response = requests.get(url, headers=HEADERS, timeout=25)
+    response.raise_for_status()
+    root = ET.fromstring(response.content)
+    atom = "{http://www.w3.org/2005/Atom}"
+    items = []
+    for entry in root.findall(f"{atom}entry"):
+        title = (entry.findtext(f"{atom}title") or "").strip()
+        if not title or BLOCK.search(title) or not ALLOW.search(title):
+            continue
+        items.append({"topic": title, "source": "Recent YouTube science/nature uploads", "traffic": ""})
+    return items
+
 def make_narration(topic, extract):
     sentences = re.split(r"(?<=[.!?])\s+", extract)
     facts = " ".join(sentences[:4]).strip()
@@ -103,9 +118,16 @@ def main():
         candidates = trends_candidates()
         print(f"Google Trends supplied {len(candidates)} safe science/nature candidates.")
     except Exception as exc:
-        print(f"Google Trends unavailable; using evergreen research: {exc}")
+        print(f"Google Trends unavailable: {exc}")
 
-    # Prefer a fresh, relevant trend when it has a usable reference article.
+    try:
+        yt_candidates = youtube_candidates()
+        candidates.extend(yt_candidates)
+        print(f"YouTube recent-upload feed supplied {len(yt_candidates)} additional candidates.")
+    except Exception as exc:
+        print(f"YouTube topic feed unavailable: {exc}")
+
+    # Prefer a fresh, relevant trend or recent video topic with a usable reference article.
     for item in candidates[:30]:
         topic = item["topic"]
         if topic.casefold() in used:
