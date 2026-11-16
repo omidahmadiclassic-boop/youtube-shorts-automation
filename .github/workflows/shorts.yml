@@ -23,7 +23,7 @@ jobs:
 
       - name: Generate licensed-footage YouTube Short
         env:
-          PIXABAY_API_KEY: \${{ secrets.PIXABAY_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
         run: |
           python create_short.py
 
