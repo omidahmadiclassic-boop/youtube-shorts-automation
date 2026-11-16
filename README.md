@@ -5,7 +5,7 @@ A zero-paid-API-cost YouTube Shorts workflow that runs on GitHub Actions cloud r
 ## Daily workflow
 
 - Runs daily at 08:00 Iran Standard Time (04:30 UTC), plus manual dispatch.
-- Checks Google Trends US for relevant science, nature, space, animal, and technology topics.
+- Checks Google Trends US and recent public YouTube science/nature uploads for relevant science, nature, space, animal, and technology topics.
 - Falls back to a rotating evergreen topic list when no suitable fresh trend has a reliable reference.
 - Uses Wikipedia article summaries as a factual research reference and records the selected topic to avoid exact repeats.
 - Creates a vertical Short using Pixabay footage, Edge TTS Aria narration, FFmpeg, and channel graphics.
@@ -39,7 +39,7 @@ Open **Actions → Curious World Daily Shorts → Run workflow**. Check the run 
 
 ## Important limitations
 
-- Topic selection is a free research-and-ranking pipeline with reusable script templates; it does not call a paid generative-AI model.
+- Topic selection is a free research-and-ranking pipeline with reusable script templates; it does not call a paid generative-AI model or claim to measure YouTube view counts.
 - Google Trends and Wikipedia can be unavailable or return unsuitable results. In that case the workflow uses an unused evergreen topic or stops rather than inventing facts.
 - A trend is not proof that a topic will get views. Titles, clips, and scripts still need periodic quality review.
 - Automatic public upload starts only after all YouTube OAuth secrets are configured.
