@@ -9,7 +9,7 @@ import requests
 from PIL import Image, ImageDraw, ImageFont
 
 W, H, FPS = 720, 1280, 30
-SCENE_SECONDS = 12
+SCENE_SECONDS = 15
 OUT_DIR = Path("output")
 ASSET_DIR = OUT_DIR / "assets"
 OUT_DIR.mkdir(exist_ok=True)
@@ -21,24 +21,14 @@ if not API_KEY:
         "Missing PIXABAY_API_KEY. Add it in GitHub repo Settings > Secrets and variables > Actions."
     )
 
-# Original educational narration and scene plan for this episode.
-TITLE = "What If Earth Suddenly Stopped Spinning?"
-NARRATION = (
-    "Imagine Earth suddenly stopped spinning. Would you stay standing? "
-    "The ground might stop, but the atmosphere and everything not firmly attached "
-    "would keep moving. Near the equator, the surface is moving at roughly one thousand "
-    "six hundred kilometers per hour. That means devastating winds and flying debris. "
-    "The oceans would keep moving too, creating enormous surges along coastlines. "
-    "And this is only the beginning: Earth's rotation helps shape our days, weather, "
-    "and ocean currents. A sudden stop would transform the planet in moments. "
-    "Follow Curious World for more science mysteries."
-)
-
-SCENES = [
-    {"query": "planet earth from space", "caption": "WHAT IF EARTH STOPPED SPINNING?"},
-    {"query": "powerful storm wind clouds", "caption": "THE ATMOSPHERE KEEPS MOVING"},
-    {"query": "huge ocean waves aerial", "caption": "THE OCEANS KEEP MOVING"},
-]
+# The daily research workflow writes this file before video production.
+TOPIC_FILE = Path("topic.json")
+if not TOPIC_FILE.exists():
+    raise SystemExit("Missing topic.json. Run discover_topic.py before create_short.py.")
+TOPIC = json.loads(TOPIC_FILE.read_text(encoding="utf-8"))
+TITLE = TOPIC["title"]
+NARRATION = TOPIC["narration"]
+SCENES = TOPIC["scenes"]
 
 FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 FONT_REG = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
