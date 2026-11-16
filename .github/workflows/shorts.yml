@@ -65,6 +65,7 @@ jobs:
             output/curious-world-short.mp4
             output/video-credits.txt
             output/youtube-description.txt
+            output/narration.srt
             topic.json
           retention-days: 7
           if-no-files-found: warn
