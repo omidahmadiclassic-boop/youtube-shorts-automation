@@ -127,7 +127,8 @@ def make_title_card(path, caption, number):
         d.text((x, y), line, font=bold, fill=(255, 255, 255, 255),
                stroke_width=1, stroke_fill=(0, 0, 0, 255))
         y += 48
-    d.text((650, 1180), f"{number}/3", font=small, fill=(230, 245, 255, 235))
+    d.rounded_rectangle((632, 28, 692, 72), radius=16, fill=(5, 18, 38, 205))
+    d.text((650, 40), f"{number}/3", font=small, fill=(230, 245, 255, 235))
     im.save(path)
 
 def main():
@@ -200,7 +201,7 @@ def main():
         "loudnorm=I=-16:TP=-1.5:LRA=11,"
         f"afade=t=in:st=0:d=0.18,afade=t=out:st={fade_start:.2f}:d=2[a]",
         "-map", "0:v:0", "-map", "[a]",
-        "-vf", "subtitles=output/narration.srt:force_style='FontName=DejaVu Sans,FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=1,Alignment=2,MarginV=190'",
+        "-vf", "subtitles=output/narration.srt:force_style='FontName=DejaVu Sans,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=1,Alignment=2,MarginV=300'",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
         "-c:a", "aac", "-b:a", "192k",
         "-shortest", "-movflags", "+faststart",
