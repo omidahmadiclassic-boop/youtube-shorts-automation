@@ -9,24 +9,30 @@ permissions:
 jobs:
   create-video:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install video, font and narration tools
+      - name: Install video and neural narration tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-dejavu-core espeak-ng
-          python -m pip install --upgrade Pillow
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          python -m pip install --upgrade requests Pillow edge-tts
 
-      - name: Generate narrated YouTube Short
+      - name: Generate licensed-footage YouTube Short
+        env:
+          PIXABAY_API_KEY: \${{ secrets.PIXABAY_API_KEY }}
         run: |
           python create_short.py
 
-      - name: Save generated video
+      - name: Save generated video and source credits
         uses: actions/upload-artifact@v4
         with:
           name: curious-world-short
-          path: output/curious-world-short.mp4
+          path: |
+            output/curious-world-short.mp4
+            output/video-credits.txt
+            output/youtube-description.txt
           retention-days: 7
