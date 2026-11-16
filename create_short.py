@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import random
 import subprocess
 import textwrap
 from pathlib import Path
@@ -138,9 +139,21 @@ def main():
     # Generate the narration first so the visual pacing follows the actual speech.
     narration_file = OUT_DIR / "narration.mp3"
     subtitles_file = OUT_DIR / "narration.srt"
+    voice_choices = [
+        "en-US-AriaNeural",
+        "en-US-JennyNeural",
+        "en-US-GuyNeural",
+        "en-US-EricNeural",
+        "en-US-MichelleNeural",
+        "en-US-ChristopherNeural",
+        "en-US-AnaNeural",
+        "en-US-SteffanNeural",
+    ]
+    selected_voice = random.choice(voice_choices)
+    print(f"Selected narration voice: {selected_voice}")
     run([
         "edge-tts",
-        "--voice", "en-US-AriaNeural",
+        "--voice", selected_voice,
         "--rate=+2%",
         "--text", NARRATION,
         "--write-media", str(narration_file),
@@ -201,7 +214,7 @@ def main():
         "loudnorm=I=-16:TP=-1.5:LRA=11,"
         f"afade=t=in:st=0:d=0.18,afade=t=out:st={fade_start:.2f}:d=2[a]",
         "-map", "0:v:0", "-map", "[a]",
-        "-vf", "subtitles=output/narration.srt:force_style='FontName=DejaVu Sans,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=1,Alignment=2,MarginV=300'",
+        "-vf", "subtitles=output/narration.srt:force_style='FontName=DejaVu Sans,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=1,Alignment=2,MarginV=55'",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
         "-c:a", "aac", "-b:a", "192k",
         "-shortest", "-movflags", "+faststart",
