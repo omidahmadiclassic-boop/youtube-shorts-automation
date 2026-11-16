@@ -147,7 +147,7 @@ def trends_candidates():
 
 def make_narration(topic, extract):
     # A concise script paced for a 30–40 second Short.
-    sentences = re.split(r"(?<=[.!?])\\s+", extract)
+    sentences = re.split(r"(?<=[.!?])\s+", extract)
     facts = " ".join(sentences[:3]).strip()
     if len(facts) > 360:
         facts = facts[:360].rsplit(" ", 1)[0].rstrip(" ,;:") + "."
