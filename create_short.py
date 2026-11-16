@@ -1,213 +1,208 @@
-import math
+import json
 import os
-import random
 import subprocess
+import textwrap
+from pathlib import Path
+from urllib.parse import urlencode
+
+import requests
 from PIL import Image, ImageDraw, ImageFont
 
-W, H, FPS, SECONDS = 720, 1280, 24, 36
-FRAMES = FPS * SECONDS
-OUT = "output/curious-world-short.mp4"
-os.makedirs("output", exist_ok=True)
+W, H, FPS = 720, 1280, 30
+SCENE_SECONDS = 12
+OUT_DIR = Path("output")
+ASSET_DIR = OUT_DIR / "assets"
+OUT_DIR.mkdir(exist_ok=True)
+ASSET_DIR.mkdir(exist_ok=True)
 
-BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-REG = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-font_hook = ImageFont.truetype(BOLD, 54)
-font_head = ImageFont.truetype(BOLD, 39)
-font_body = ImageFont.truetype(REG, 27)
-font_tag = ImageFont.truetype(BOLD, 19)
+API_KEY = os.environ.get("PIXABAY_API_KEY", "").strip()
+if not API_KEY:
+    raise SystemExit(
+        "Missing PIXABAY_API_KEY. Add it in GitHub repo Settings > Secrets and variables > Actions."
+    )
 
-random.seed(23)
-STARS = [(random.randrange(W), random.randrange(H), random.choice([1, 1, 2, 3]))
-         for _ in range(110)]
-
+# Original educational narration and scene plan for this episode.
+TITLE = "What If Earth Suddenly Stopped Spinning?"
 NARRATION = (
-    "What if Earth stopped spinning... right now? "
+    "Imagine Earth suddenly stopped spinning. Would you stay standing? "
     "The ground might stop, but the atmosphere and everything not firmly attached "
-    "would keep moving. Near the equator, the speed is over one thousand six hundred "
-    "kilometers per hour. The result could be devastating: extreme winds, flying debris, "
-    "and enormous ocean surges. But here is the twist. Earth would not simply become "
-    "a quiet, motionless planet. Its rotation shapes our days, our weather, and our oceans. "
-    "A sudden stop would be a global catastrophe. Would you want to see what happens next?"
+    "would keep moving. Near the equator, the surface is moving at roughly one thousand "
+    "six hundred kilometers per hour. That means devastating winds and flying debris. "
+    "The oceans would keep moving too, creating enormous surges along coastlines. "
+    "And this is only the beginning: Earth's rotation helps shape our days, weather, "
+    "and ocean currents. A sudden stop would transform the planet in moments. "
+    "Follow Curious World for more science mysteries."
 )
 
-def fit_lines(draw, text, font, max_width):
-    words, lines, current = text.split(), [], ""
-    for word in words:
-        test = (current + " " + word).strip()
-        if draw.textbbox((0, 0), test, font=font)[2] <= max_width:
-            current = test
-        else:
-            if current:
-                lines.append(current)
-            current = word
-    if current:
-        lines.append(current)
-    return lines
-
-def centered(draw, text, y, font, fill, max_width=620, gap=10):
-    lines = fit_lines(draw, text, font, max_width)
-    line_h = font.size + gap
-    total = len(lines) * line_h - gap
-    yy = y - total // 2
-    for line in lines:
-        b = draw.textbbox((0, 0), line, font=font, stroke_width=1)
-        x = (W - (b[2] - b[0])) // 2
-        draw.text((x, yy), line, font=font, fill=fill,
-                  stroke_width=1, stroke_fill=(3, 8, 20))
-        yy += line_h
-
-def background(t):
-    im = Image.new("RGB", (W, H))
-    pix = im.load()
-    for y in range(H):
-        q = y / H
-        c = (int(4 + 4*q), int(9 + 13*q), int(28 + 28*q))
-        for x in range(W):
-            pix[x, y] = c
-    d = ImageDraw.Draw(im)
-    for x, y, r in STARS:
-        yy = int((y + t * (8 + r*5)) % H)
-        d.ellipse((x, yy, x+r, yy+r), fill=(135, 174, 220))
-    return im
-
-def draw_earth(draw, t, cx=360, cy=405, radius=185):
-    # Atmosphere and ocean
-    draw.ellipse((cx-radius-13, cy-radius-13, cx+radius+13, cy+radius+13),
-                fill=(30, 115, 205))
-    draw.ellipse((cx-radius, cy-radius, cx+radius, cy+radius),
-                fill=(20, 74, 150))
-    # Stylized continents that drift around the globe
-    shift = int((t * 26) % 150)
-    shapes = [
-        [(270,300),(300,265),(345,275),(365,310),(340,340),(325,380),(290,360),(275,330)],
-        [(385,365),(425,350),(455,380),(445,420),(420,445),(405,420)],
-        [(285,430),(325,450),(340,500),(320,545),(290,520),(275,475)],
-        [(430,270),(470,290),(480,320),(450,335),(425,315)]
-    ]
-    for poly in shapes:
-        moved = [((x-360+shift) % 330 + 195, y) for x,y in poly]
-        draw.polygon(moved, fill=(45, 153, 111))
-    draw.arc((cx-radius-4,cy-radius-4,cx+radius+4,cy+radius+4),
-             205, 330, fill=(125, 210, 255), width=5)
-    # Highlight
-    draw.ellipse((cx-radius+35, cy-radius+28, cx-radius+62, cy-radius+55),
-                 fill=(75, 145, 215))
-
-def scene_one(im, t):
-    d = ImageDraw.Draw(im)
-    draw_earth(d, t)
-    # Rotation arrows
-    angle = t * 2.4
-    for k in range(3):
-        y = 185 + k*18
-        x = 360 + int(math.sin(angle+k)*95)
-        d.arc((x-80,y-30,x+80,y+30), 190, 340, fill=(104,205,255), width=4)
-    centered(d, "WHAT IF EARTH", 700, font_hook, (115,220,255))
-    centered(d, "STOPPED SPINNING?", 775, font_head, (255,255,255))
-    centered(d, "The planet stops. Everything else keeps moving.", 890,
-             font_body, (215,228,246), max_width=600)
-
-def scene_two(im, t):
-    d = ImageDraw.Draw(im)
-    # Fast-moving wind streaks
-    for i in range(18):
-        y = 210 + (i*61) % 650
-        x = int((i*97 + t*310) % (W+180)) - 90
-        d.line((x,y,x+95+(i%4)*24,y-12), fill=(80,174,225), width=2+(i%3))
-    # City skyline
-    base = 760
-    buildings = [(15,260,150),(95,190,130),(185,300,165),(290,215,140),
-                 (390,330,180),(500,230,145),(600,290,170)]
-    for x,w,h in buildings:
-        d.rectangle((x,base-h,x+w,base), fill=(12,28,58), outline=(61,111,155), width=3)
-        for wx in range(x+15,x+w-8,28):
-            for wy in range(base-h+20,base-15,35):
-                d.rectangle((wx,wy,wx+8,wy+12), fill=(245,184,92))
-    # Flying debris silhouettes
-    for i in range(9):
-        x = int((i*111 + t*390) % (W+100))-50
-        y = 390 + int(math.sin(t*2+i)*95)
-        d.polygon([(x,y),(x+18,y-8),(x+31,y+5),(x+9,y+13)], fill=(190,205,220))
-    centered(d, "THE AIR KEEPS MOVING", 875, font_head, (255,205,120))
-    centered(d, "Extreme winds could sweep across the surface.", 965,
-             font_body, (230,238,248), max_width=610)
-
-def scene_three(im, t):
-    d = ImageDraw.Draw(im)
-    # Stylized rising ocean waves
-    for layer in range(5):
-        y0 = 700 + layer*75
-        pts = [(0,H)]
-        for x in range(0,W+1,12):
-            y = y0 + int(math.sin(x/65 + t*2.4 + layer)*24)
-            pts.append((x,y))
-        pts.append((W,H))
-        d.polygon(pts, fill=(10+layer*3, 65+layer*12, 115+layer*13))
-        d.line(pts[1:-1], fill=(80,185,220), width=3)
-    # Sun / horizon
-    d.ellipse((275,275,445,445), fill=(245,158,85))
-    d.rectangle((0,530,W,555), fill=(40,112,155))
-    centered(d, "OCEANS IN MOTION", 860, font_head, (255,210,145))
-    centered(d, "Enormous surges could reshape coastlines.", 955,
-             font_body, (235,243,250), max_width=610)
-
-def draw_overlay(im, t):
-    d = ImageDraw.Draw(im)
-    # Top channel tag
-    d.rounded_rectangle((26,28,250,70), radius=18, fill=(9,25,52), outline=(60,130,190))
-    d.text((43,39), "CURIOUS WORLD", font=font_tag, fill=(155,220,255))
-    # Scene progress
-    progress = min(t / SECONDS, 1)
-    d.rounded_rectangle((30,1220,690,1230), radius=5, fill=(38,55,78))
-    d.rounded_rectangle((30,1220,30+int(660*progress),1230), radius=5, fill=(75,190,255))
-
-def make_frame(n):
-    t = n/FPS
-    im = background(t)
-    if t < 12:
-        scene_one(im,t)
-    elif t < 24:
-        scene_two(im,t-12)
-    else:
-        scene_three(im,t-24)
-    draw_overlay(im,t)
-    return im
-
-# Build narration locally with a free system voice (no API key).
-subprocess.run([
-    "espeak-ng", "-v", "en-us", "-s", "155", "-p", "48",
-    "-a", "175", "-w", "output/narration.wav", NARRATION
-], check=True)
-
-# Render silent video frames to H.264.
-cmd = [
-    "ffmpeg","-y","-loglevel","error",
-    "-f","rawvideo","-vcodec","rawvideo","-pix_fmt","rgb24",
-    "-s",f"{W}x{H}","-r",str(FPS),"-i","-",
-    "-an","-c:v","libx264","-preset","ultrafast",
-    "-pix_fmt","yuv420p","-movflags","+faststart","output/video_silent.mp4"
+SCENES = [
+    {"query": "planet earth from space", "caption": "WHAT IF EARTH STOPPED SPINNING?"},
+    {"query": "powerful storm wind clouds", "caption": "THE ATMOSPHERE KEEPS MOVING"},
+    {"query": "huge ocean waves aerial", "caption": "THE OCEANS KEEP MOVING"},
 ]
-proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
-try:
-    for n in range(FRAMES):
-        proc.stdin.write(make_frame(n).tobytes())
-finally:
-    proc.stdin.close()
-if proc.wait() != 0:
-    raise RuntimeError("FFmpeg video rendering failed.")
 
-# Add a quiet cinematic tone bed under narration; voice remains foreground.
-subprocess.run([
-    "ffmpeg","-y","-loglevel","error",
-    "-i","output/video_silent.mp4","-i","output/narration.wav",
-    "-f","lavfi","-i","sine=frequency=110:sample_rate=44100:duration=36",
-    "-filter_complex",
-    "[1:a]volume=1.0,apad=pad_dur=36[voice];"
-    "[2:a]volume=0.035,lowpass=f=240,afade=t=in:st=0:d=2,afade=t=out:st=32:d=4[bed];"
-    "[voice][bed]amix=inputs=2:duration=longest:dropout_transition=2,"
-    "alimiter=limit=0.95[a]",
-    "-map","0:v:0","-map","[a]","-c:v","copy","-c:a","aac",
-    "-b:a","128k","-shortest","-movflags","+faststart",OUT
-], check=True)
+FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+FONT_REG = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 
-print(f"Professional-style short created: {OUT}")
+def run(cmd):
+    subprocess.run(cmd, check=True)
+
+def get_pixabay_video(query, index):
+    # One API request per scene; do not loop or mass-download search results.
+    params = {
+        "key": API_KEY,
+        "q": query,
+        "video_type": "film",
+        "safesearch": "true",
+        "order": "popular",
+        "per_page": 10,
+    }
+    response = requests.get(
+        "https://pixabay.com/api/videos/",
+        params=params,
+        timeout=45,
+        headers={"User-Agent": "CuriousWorldShorts/1.0"},
+    )
+    response.raise_for_status()
+    data = response.json()
+    hits = data.get("hits", [])
+    if not hits:
+        raise RuntimeError(f"No Pixabay videos found for query: {query}")
+
+    # Prefer a usable landscape/large file; keep the original page and creator for credits.
+    candidates = sorted(
+        hits,
+        key=lambda v: (
+            v.get("duration", 0) >= SCENE_SECONDS,
+            v.get("videos", {}).get("large", {}).get("width", 0),
+            v.get("downloads", 0),
+        ),
+        reverse=True,
+    )
+    for hit in candidates:
+        variants = hit.get("videos", {})
+        variant = variants.get("large") or variants.get("medium") or variants.get("small")
+        if variant and variant.get("url"):
+            target = ASSET_DIR / f"scene_{index:02d}.mp4"
+            with requests.get(variant["url"], stream=True, timeout=90) as r:
+                r.raise_for_status()
+                with target.open("wb") as f:
+                    for chunk in r.iter_content(chunk_size=1024 * 1024):
+                        if chunk:
+                            f.write(chunk)
+            if target.stat().st_size > 50_000:
+                return target, {
+                    "id": hit.get("id"),
+                    "pageURL": hit.get("pageURL"),
+                    "creator": hit.get("user", "Pixabay contributor"),
+                    "query": query,
+                }
+            target.unlink(missing_ok=True)
+    raise RuntimeError(f"Pixabay returned no downloadable video for: {query}")
+
+def make_title_card(path, caption, number):
+    im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    bold = ImageFont.truetype(FONT_BOLD, 35)
+    small = ImageFont.truetype(FONT_BOLD, 18)
+    d.rounded_rectangle((24, 28, 310, 72), radius=18,
+                        fill=(5, 18, 38, 205), outline=(110, 205, 255, 220), width=2)
+    d.text((42, 40), "CURIOUS WORLD", font=small, fill=(170, 230, 255, 255))
+    d.rounded_rectangle((28, 965, 692, 1125), radius=24,
+                        fill=(3, 12, 28, 205), outline=(85, 175, 235, 220), width=2)
+    lines = textwrap.wrap(caption, width=27)
+    y = 1000 if len(lines) == 1 else 982
+    for line in lines[:2]:
+        box = d.textbbox((0, 0), line, font=bold, stroke_width=1)
+        x = (W - (box[2] - box[0])) // 2
+        d.text((x, y), line, font=bold, fill=(255, 255, 255, 255),
+               stroke_width=1, stroke_fill=(0, 0, 0, 255))
+        y += 48
+    d.text((650, 1180), f"{number}/3", font=small, fill=(230, 245, 255, 235))
+    im.save(path)
+
+def main():
+    credits = []
+    segment_files = []
+
+    for i, scene in enumerate(SCENES, start=1):
+        clip, credit = get_pixabay_video(scene["query"], i)
+        credits.append(credit)
+        overlay = ASSET_DIR / f"overlay_{i:02d}.png"
+        make_title_card(overlay, scene["caption"], i)
+        segment = ASSET_DIR / f"segment_{i:02d}.mp4"
+
+        # Crop to vertical 9:16, keep the video moving, and add original channel graphics.
+        run([
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-stream_loop", "-1", "-i", str(clip),
+            "-loop", "1", "-i", str(overlay),
+            "-filter_complex",
+            f"[0:v]scale={W}:{H}:force_original_aspect_ratio=increase,"
+            f"crop={W}:{H},fps={FPS},setsar=1[base];"
+            f"[base][1:v]overlay=0:0:shortest=1,format=yuv420p[v]",
+            "-map", "[v]", "-t", str(SCENE_SECONDS),
+            "-an", "-c:v", "libx264", "-preset", "veryfast",
+            "-crf", "21", "-movflags", "+faststart", str(segment)
+        ])
+        segment_files.append(segment)
+
+    concat_file = OUT_DIR / "concat.txt"
+    concat_file.write_text(
+        "".join(f"file '{p.resolve()}'\n" for p in segment_files),
+        encoding="utf-8"
+    )
+    silent = OUT_DIR / "video_silent.mp4"
+    run([
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-f", "concat", "-safe", "0", "-i", str(concat_file),
+        "-c", "copy", str(silent)
+    ])
+
+    # Neural English voice. No API key or paid TTS account is used.
+    run([
+        "edge-tts",
+        "--voice", "en-US-AriaNeural",
+        "--rate=-3%",
+        "--text", NARRATION,
+        "--write-media", str(OUT_DIR / "narration.mp3"),
+    ])
+
+    # No synthetic 110 Hz tone: clean voice only, with gentle fades and loudness control.
+    run([
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-i", str(silent),
+        "-i", str(OUT_DIR / "narration.mp3"),
+        "-filter_complex",
+        "[1:a]highpass=f=75,lowpass=f=14000,"
+        "loudnorm=I=-16:TP=-1.5:LRA=11,"
+        "afade=t=in:st=0:d=0.18,afade=t=out:st=33:d=2[a]",
+        "-map", "0:v:0", "-map", "[a]",
+        "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+        "-shortest", "-movflags", "+faststart",
+        str(OUT_DIR / "curious-world-short.mp4")
+    ])
+
+    # Keep an auditable source/creator record beside the generated video.
+    credit_lines = [
+        "Visual footage: Pixabay (used under the Pixabay Content License).",
+        "Please review each source page and the license before publishing.",
+        "Pixabay: https://pixabay.com/service/license-summary/",
+        "",
+    ]
+    for item in credits:
+        credit_lines.append(
+            f"Scene query: {item['query']} | Creator: {item['creator']} | "
+            f"Source: {item['pageURL']} | Asset ID: {item['id']}"
+        )
+    (OUT_DIR / "video-credits.txt").write_text("\n".join(credit_lines), encoding="utf-8")
+    (OUT_DIR / "youtube-description.txt").write_text(
+        f"{TITLE}\n\nOriginal Curious World narration and edit. "
+        "Stock footage sourced from Pixabay under its Content License.\n"
+        "Footage credits and source links are included in video-credits.txt.\n\n"
+        "More science mysteries: subscribe to Curious World!\n",
+        encoding="utf-8"
+    )
+    print(f"Created {OUT_DIR / 'curious-world-short.mp4'}")
+
+if __name__ == "__main__":
+    main()
