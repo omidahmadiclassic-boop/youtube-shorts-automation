@@ -96,10 +96,10 @@ def make_title_card(path, caption, number):
     d.rounded_rectangle((24, 28, 310, 72), radius=18,
                         fill=(5, 18, 38, 205), outline=(110, 205, 255, 220), width=2)
     d.text((42, 40), "CURIOUS WORLD", font=small, fill=(170, 230, 255, 255))
-    d.rounded_rectangle((28, 965, 692, 1125), radius=24,
+    d.rounded_rectangle((28, 135, 692, 295), radius=24,
                         fill=(3, 12, 28, 205), outline=(85, 175, 235, 220), width=2)
     lines = textwrap.wrap(caption, width=27)
-    y = 1000 if len(lines) == 1 else 982
+    y = 170 if len(lines) == 1 else 152
     for line in lines[:2]:
         box = d.textbbox((0, 0), line, font=bold, stroke_width=1)
         x = (W - (box[2] - box[0])) // 2
