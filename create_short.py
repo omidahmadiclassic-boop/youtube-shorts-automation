@@ -9,7 +9,6 @@ import requests
 from PIL import Image, ImageDraw, ImageFont
 
 W, H, FPS = 720, 1280, 30
-SCENE_SECONDS = 15
 OUT_DIR = Path("output")
 ASSET_DIR = OUT_DIR / "assets"
 OUT_DIR.mkdir(exist_ok=True)
@@ -36,7 +35,7 @@ FONT_REG = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 def run(cmd):
     subprocess.run(cmd, check=True)
 
-def get_pixabay_video(query, index):
+def get_pixabay_video(query, index, scene_seconds):
     # One API request per scene; do not loop or mass-download search results.
     params = {
         "key": API_KEY,
@@ -135,7 +134,7 @@ def main():
     print(f"Narration: {narration_seconds:.1f}s; scene pacing: {scene_seconds:.1f}s.")
 
     for i, scene in enumerate(SCENES, start=1):
-        clip, credit = get_pixabay_video(scene["query"], i)
+        clip, credit = get_pixabay_video(scene["query"], i, scene_seconds)
         credits.append(credit)
         overlay = ASSET_DIR / f"overlay_{i:02d}.png"
         make_title_card(overlay, scene["caption"], i)
@@ -168,7 +167,8 @@ def main():
         "-c", "copy", str(silent)
     ])
 
-    # Burn synchronized word-level captions into the vertical video.
+    # Burn synchronized captions into the vertical video.
+    fade_start = max(0, narration_seconds - 2.0)
     # No paid API is used; Edge TTS supplies both audio and subtitle timings.
     run([
         "ffmpeg", "-y", "-loglevel", "error",
@@ -177,7 +177,7 @@ def main():
         "-filter_complex",
         "[1:a]highpass=f=75,lowpass=f=14000,"
         "loudnorm=I=-16:TP=-1.5:LRA=11,"
-        "afade=t=in:st=0:d=0.18,afade=t=out:st=33:d=2[a]",
+        f"afade=t=in:st=0:d=0.18,afade=t=out:st={fade_start:.2f}:d=2[a]",
         "-map", "0:v:0", "-map", "[a]",
         "-vf", "subtitles=output/narration.srt:force_style='FontName=DejaVu Sans,FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=1,Alignment=2,MarginV=190'",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
