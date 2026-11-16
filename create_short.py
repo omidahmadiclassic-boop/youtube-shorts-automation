@@ -172,7 +172,7 @@ def main():
         clip, credit = get_pixabay_video(scene["query"], i, scene_seconds)
         credits.append(credit)
         overlay = ASSET_DIR / f"overlay_{i:02d}.png"
-        make_title_card(overlay, scene["caption"], i)
+        make_title_card(overlay, TITLE, i)
         segment = ASSET_DIR / f"segment_{i:02d}.mp4"
 
         # Crop to vertical 9:16, keep the video moving, and add original channel graphics.
@@ -214,7 +214,7 @@ def main():
         "loudnorm=I=-16:TP=-1.5:LRA=11,"
         f"afade=t=in:st=0:d=0.18,afade=t=out:st={fade_start:.2f}:d=2[a]",
         "-map", "0:v:0", "-map", "[a]",
-        "-vf", "subtitles=output/narration.srt:force_style='FontName=DejaVu Sans,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=1,Alignment=2,MarginV=55'",
+        "-vf", "subtitles=output/narration.srt:force_style='FontName=DejaVu Sans,FontSize=14,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginV=65'",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
         "-c:a", "aac", "-b:a", "192k",
         "-shortest", "-movflags", "+faststart",
