@@ -71,7 +71,7 @@ def get_pixabay_video(query, index, scene_seconds):
         return len(query_terms & tags)
 
     ranked = [(relevance(hit), hit) for hit in hits]
-    ranked = [(score, hit) for score, hit in ranked if score >= 1]
+    ranked = [(score, hit) for score, hit in ranked if score >= 2]
     if not ranked:
         raise RuntimeError(
             f"Pixabay results did not match the scene keywords closely enough: {query}"
