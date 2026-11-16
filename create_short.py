@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import subprocess
 import textwrap
 from pathlib import Path
@@ -57,16 +58,36 @@ def get_pixabay_video(query, index, scene_seconds):
     if not hits:
         raise RuntimeError(f"No Pixabay videos found for query: {query}")
 
-    # Prefer a usable landscape/large file; keep the original page and creator for credits.
-    candidates = sorted(
-        hits,
-        key=lambda v: (
-            v.get("duration", 0) >= scene_seconds,
-            v.get("videos", {}).get("large", {}).get("width", 0),
-            v.get("downloads", 0),
-        ),
-        reverse=True,
-    )
+    # Pixabay's API is tag-based, so rank returned clips by overlap with
+    # the scene-specific search terms before considering popularity/resolution.
+    query_terms = {
+        term.lower() for term in re.findall(r"[A-Za-z][A-Za-z-]{2,}", query)
+    }
+    def relevance(hit):
+        tags = set(re.findall(
+            r"[A-Za-z][A-Za-z-]{2,}",
+            (hit.get("tags") or "").lower()
+        ))
+        return len(query_terms & tags)
+
+    ranked = [(relevance(hit), hit) for hit in hits]
+    ranked = [(score, hit) for score, hit in ranked if score >= 1]
+    if not ranked:
+        raise RuntimeError(
+            f"Pixabay results did not match the scene keywords closely enough: {query}"
+        )
+    candidates = [
+        hit for _, hit in sorted(
+            ranked,
+            key=lambda pair: (
+                pair[0],
+                pair[1].get("duration", 0) >= scene_seconds,
+                pair[1].get("videos", {}).get("large", {}).get("width", 0),
+                pair[1].get("downloads", 0),
+            ),
+            reverse=True,
+        )
+    ]
     for hit in candidates:
         variants = hit.get("videos", {})
         variant = variants.get("large") or variants.get("medium") or variants.get("small")
