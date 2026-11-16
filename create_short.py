@@ -62,7 +62,7 @@ def get_pixabay_video(query, index):
     candidates = sorted(
         hits,
         key=lambda v: (
-            v.get("duration", 0) >= SCENE_SECONDS,
+            v.get("duration", 0) >= scene_seconds,
             v.get("videos", {}).get("large", {}).get("width", 0),
             v.get("downloads", 0),
         ),
@@ -114,6 +114,26 @@ def main():
     credits = []
     segment_files = []
 
+    # Generate the narration first so the visual pacing follows the actual speech.
+    narration_file = OUT_DIR / "narration.mp3"
+    subtitles_file = OUT_DIR / "narration.srt"
+    run([
+        "edge-tts",
+        "--voice", "en-US-AriaNeural",
+        "--rate=+2%",
+        "--text", NARRATION,
+        "--write-media", str(narration_file),
+        "--write-subtitles", str(subtitles_file),
+    ])
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", str(narration_file)],
+        check=True, capture_output=True, text=True
+    )
+    narration_seconds = float(probe.stdout.strip())
+    scene_seconds = max(8, narration_seconds / max(1, len(SCENES)) + 0.6)
+    print(f"Narration: {narration_seconds:.1f}s; scene pacing: {scene_seconds:.1f}s.")
+
     for i, scene in enumerate(SCENES, start=1):
         clip, credit = get_pixabay_video(scene["query"], i)
         credits.append(credit)
@@ -130,7 +150,7 @@ def main():
             f"[0:v]scale={W}:{H}:force_original_aspect_ratio=increase,"
             f"crop={W}:{H},fps={FPS},setsar=1[base];"
             f"[base][1:v]overlay=0:0:shortest=1,format=yuv420p[v]",
-            "-map", "[v]", "-t", str(SCENE_SECONDS),
+            "-map", "[v]", "-t", str(scene_seconds),
             "-an", "-c:v", "libx264", "-preset", "veryfast",
             "-crf", "21", "-movflags", "+faststart", str(segment)
         ])
@@ -148,26 +168,20 @@ def main():
         "-c", "copy", str(silent)
     ])
 
-    # Neural English voice. No API key or paid TTS account is used.
-    run([
-        "edge-tts",
-        "--voice", "en-US-AriaNeural",
-        "--rate=-3%",
-        "--text", NARRATION,
-        "--write-media", str(OUT_DIR / "narration.mp3"),
-    ])
-
-    # No synthetic 110 Hz tone: clean voice only, with gentle fades and loudness control.
+    # Burn synchronized word-level captions into the vertical video.
+    # No paid API is used; Edge TTS supplies both audio and subtitle timings.
     run([
         "ffmpeg", "-y", "-loglevel", "error",
         "-i", str(silent),
-        "-i", str(OUT_DIR / "narration.mp3"),
+        "-i", str(narration_file),
         "-filter_complex",
         "[1:a]highpass=f=75,lowpass=f=14000,"
         "loudnorm=I=-16:TP=-1.5:LRA=11,"
         "afade=t=in:st=0:d=0.18,afade=t=out:st=33:d=2[a]",
         "-map", "0:v:0", "-map", "[a]",
-        "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+        "-vf", "subtitles=output/narration.srt:force_style='FontName=DejaVu Sans,FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=1,Alignment=2,MarginV=190'",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-c:a", "aac", "-b:a", "192k",
         "-shortest", "-movflags", "+faststart",
         str(OUT_DIR / "curious-world-short.mp4")
     ])
