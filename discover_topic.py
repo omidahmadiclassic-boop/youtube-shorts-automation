@@ -146,16 +146,16 @@ def trends_candidates():
     return []
 
 def make_narration(topic, extract):
-    sentences = re.split(r"(?<=[.!?])\s+", extract)
-    facts = " ".join(sentences[:4]).strip()
-    if len(facts) > 560:
-        facts = facts[:560].rsplit(" ", 1)[0]
+    # A concise script paced for a 30–40 second Short.
+    sentences = re.split(r"(?<=[.!?])\\s+", extract)
+    facts = " ".join(sentences[:3]).strip()
+    if len(facts) > 360:
+        facts = facts[:360].rsplit(" ", 1)[0].rstrip(" ,;:") + "."
     return (
-        f"What makes {topic} so fascinating? "
+        f"Here is something surprising about {topic}. "
         f"{facts} "
-        "Scientists keep studying questions like this because every discovery "
-        "can reveal something surprising about our world. "
-        "Follow Curious World for more amazing discoveries."
+        "And that is only part of the story. "
+        "Follow Curious World for more quick discoveries."
     )
 
 def main():
