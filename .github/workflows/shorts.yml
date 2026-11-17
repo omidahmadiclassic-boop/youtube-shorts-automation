@@ -2,8 +2,8 @@ name: Curious World Daily Shorts
 
 on:
   schedule:
-    # 08:00 Iran Standard Time (UTC+03:30); GitHub cron uses UTC.
-    - cron: "30 4 * * *"
+    # Daily at 13:23 UTC; avoid the busy top-of-hour schedule window.
+    - cron: "23 13 * * *"
   workflow_dispatch:
 
 permissions:
