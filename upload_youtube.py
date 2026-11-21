@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -8,6 +9,65 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+
+# Keep metadata relevant to each topic instead of pasting the same generic tags.
+TOPIC_TAGS = {
+    "space": ["space", "universe", "astronomy", "planets", "NASA"],
+    "planet": ["space", "universe", "astronomy", "planets", "NASA"],
+    "moon": ["space", "astronomy", "moon", "universe"],
+    "animal": ["animals", "wildlife", "nature", "animal facts"],
+    "ocean": ["ocean", "marine life", "deep sea", "nature"],
+    "nature": ["nature", "wildlife", "earth", "science"],
+    "science": ["science", "science facts", "explained", "education"],
+    "technology": ["technology", "tech", "innovation", "explained"],
+    "artificial intelligence": ["AI", "artificial intelligence", "technology", "future"],
+    "brain": ["brain", "human body", "neuroscience", "science"],
+    "earth": ["Earth", "nature", "planet", "science"],
+}
+
+def make_metadata(topic, description):
+    raw_topic = topic.get("topic", "Curious World discovery").strip()
+    title = topic.get("title", raw_topic).strip()
+    # Keep the researched title readable; never add unrelated clickbait.
+    title = re.sub(r"\\s+", " ", title)[:100].strip()
+
+    haystack = (raw_topic + " " + topic.get("narration", "")).casefold()
+    tags = ["Curious World", "science", "facts", "education", "shorts"]
+    for keyword, additions in TOPIC_TAGS.items():
+        if keyword in haystack:
+            tags.extend(additions)
+    words = re.findall(r"[A-Za-z][A-Za-z0-9-]{2,}", raw_topic)
+    tags.extend(words)
+    # YouTube tags are metadata, not a keyword dump: deduplicate and cap.
+    unique_tags = []
+    seen = set()
+    for tag in tags:
+        normalized = tag.casefold()
+        if normalized not in seen:
+            seen.add(normalized)
+            unique_tags.append(tag[:30])
+    unique_tags = unique_tags[:15]
+
+    hashtags = ["#Shorts", "#Science"]
+    if any(word in haystack for word in ("animal", "wildlife", "cat", "shark", "octopus", "bee")):
+        hashtags.append("#Nature")
+    elif any(word in haystack for word in ("space", "planet", "moon", "star", "galaxy", "black hole")):
+        hashtags.append("#Space")
+    elif any(word in haystack for word in ("technology", "artificial intelligence", "robot", " ai ")):
+        hashtags.append("#Technology")
+    else:
+        hashtags.append("#DidYouKnow")
+    hashtags = list(dict.fromkeys(hashtags))[:3]
+
+    clean_description = description.strip()
+    if topic.get("reference_url"):
+        clean_description += "\\n\\nResearch reference: " + topic["reference_url"]
+    clean_description += (
+        "\\n\\nWhat do you think? Share your answer in the comments! "
+        "Subscribe to Curious World for more quick discoveries.\\n\\n"
+        + " ".join(hashtags)
+    )
+    return title, clean_description[:5000], unique_tags
 
 def main():
     client_id = os.environ.get("YOUTUBE_CLIENT_ID", "")
@@ -52,12 +112,12 @@ def main():
         )
 
     description = Path("output/youtube-description.txt").read_text(encoding="utf-8")
-    description += "\nResearch reference: " + topic.get("reference_url", "")
+    title, description, tags = make_metadata(topic, description)
     body = {
         "snippet": {
-            "title": topic["title"][:100],
-            "description": description[:5000],
-            "tags": ["Curious World", "science", "facts", "education", "shorts"],
+            "title": title,
+            "description": description,
+            "tags": tags,
             "categoryId": "27",
             "defaultLanguage": "en",
         },
@@ -65,6 +125,10 @@ def main():
             "privacyStatus": "public",
         },
     }
+    print(f"YouTube title: {title}")
+    print(f"YouTube hashtags: {' '.join(description.splitlines()[-1].split())}")
+    print(f"YouTube tags ({len(tags)}): {', '.join(tags)}")
+
     media = MediaFileUpload(
         "output/curious-world-short.mp4",
         mimetype="video/mp4",
@@ -83,6 +147,7 @@ def main():
         "topic": topic["topic"],
         "video_id": video_id,
         "url": f"https://www.youtube.com/shorts/{video_id}",
+        "title": title,
         "published_at_utc": datetime.now(timezone.utc).isoformat(),
     })
     upload_history["published_topics"] = published[-500:]
