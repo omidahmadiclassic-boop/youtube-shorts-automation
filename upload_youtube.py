@@ -1,4 +1,6 @@
+import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 from google.oauth2.credentials import Credentials
@@ -32,7 +34,23 @@ def main():
     )
     youtube = build("youtube", "v3", credentials=credentials)
 
-    topic = __import__("json").loads(Path("topic.json").read_text(encoding="utf-8"))
+    topic = json.loads(Path("topic.json").read_text(encoding="utf-8"))
+    topic_name = " ".join(topic["topic"].casefold().split())
+    history_path = Path("upload_history.json")
+    try:
+        upload_history = json.loads(history_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        upload_history = {"published_topics": []}
+    published = upload_history.get("published_topics", [])
+    if any(
+        " ".join(str(item.get("topic", "")).casefold().split()) == topic_name
+        for item in published if isinstance(item, dict)
+    ):
+        raise SystemExit(
+            f"This topic was already published: {topic['topic']!r}. "
+            "Skipping upload to prevent a duplicate."
+        )
+
     description = Path("output/youtube-description.txt").read_text(encoding="utf-8")
     description += "\nResearch reference: " + topic.get("reference_url", "")
     body = {
@@ -59,6 +77,19 @@ def main():
     )
     response = request.execute()
     video_id = response.get("id")
+    if not video_id:
+        raise SystemExit("YouTube did not return a video ID; upload status is uncertain.")
+    published.append({
+        "topic": topic["topic"],
+        "video_id": video_id,
+        "url": f"https://www.youtube.com/shorts/{video_id}",
+        "published_at_utc": datetime.now(timezone.utc).isoformat(),
+    })
+    upload_history["published_topics"] = published[-500:]
+    history_path.write_text(
+        json.dumps(upload_history, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     print(f"Uploaded successfully: https://www.youtube.com/shorts/{video_id}")
 
 if __name__ == "__main__":
