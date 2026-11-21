@@ -29,7 +29,7 @@ def make_metadata(topic, description):
     raw_topic = topic.get("topic", "Curious World discovery").strip()
     title = topic.get("title", raw_topic).strip()
     # Keep the researched title readable; never add unrelated clickbait.
-    title = re.sub(r"\\s+", " ", title)[:100].strip()
+    title = re.sub(r"\s+", " ", title)[:100].strip()
 
     haystack = (raw_topic + " " + topic.get("narration", "")).casefold()
     tags = ["Curious World", "science", "facts", "education", "shorts"]
@@ -61,10 +61,10 @@ def make_metadata(topic, description):
 
     clean_description = description.strip()
     if topic.get("reference_url"):
-        clean_description += "\\n\\nResearch reference: " + topic["reference_url"]
+        clean_description += "\n\nResearch reference: " + topic["reference_url"]
     clean_description += (
-        "\\n\\nWhat do you think? Share your answer in the comments! "
-        "Subscribe to Curious World for more quick discoveries.\\n\\n"
+        "\n\nWhat do you think? Share your answer in the comments! "
+        "Subscribe to Curious World for more quick discoveries.\n\n"
         + " ".join(hashtags)
     )
     return title, clean_description[:5000], unique_tags
