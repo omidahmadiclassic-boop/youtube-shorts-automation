@@ -38,15 +38,9 @@ jobs:
         run: |
           python create_short.py
 
-      - name: Save topic history to prevent repeats
+      - name: Validate video before publishing
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add topic_history.json
-          if ! git diff --cached --quiet; then
-            git commit -m "Record today's Curious World topic"
-            git push
-          fi
+          python validate_video.py
 
       - name: Upload Short to YouTube automatically
         env:
@@ -55,6 +49,16 @@ jobs:
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: |
           python upload_youtube.py
+
+      - name: Save topic and upload history
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add topic_history.json upload_history.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Record published Curious World topic"
+            git push
+          fi
 
       - name: Save video and source credits
         if: always()
