@@ -28,6 +28,10 @@ jobs:
           sudo apt-get install -y ffmpeg fonts-dejavu-core
           python -m pip install --upgrade requests Pillow edge-tts google-api-python-client google-auth google-auth-oauthlib
 
+      - name: Check Python syntax
+        run: |
+          python -m compileall -q discover_topic.py create_short.py upload_youtube.py validate_video.py
+
       - name: Research and select a fresh daily topic
         run: |
           python discover_topic.py
