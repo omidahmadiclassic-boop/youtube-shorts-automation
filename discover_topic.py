@@ -214,7 +214,7 @@ def main():
 
     topic = selected["topic"]
     title = topic if len(topic) < 65 else topic[:62].rsplit(" ", 1)[0] + "..."
-    sentences = re.split(r"(?<=[.!?])\\s+", selected["extract"])
+    sentences = re.split(r"(?<=[.!?])\s+", selected["extract"])
     # Build a separate visual search phrase from each factual sentence.
     # Topic keywords anchor every query; sentence keywords distinguish each scene.
     stop_words = {
