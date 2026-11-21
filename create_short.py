@@ -2,6 +2,7 @@ import json
 import os
 import re
 import random
+import shutil
 import subprocess
 import textwrap
 from pathlib import Path
@@ -133,6 +134,14 @@ def make_title_card(path, caption, number):
     im.save(path)
 
 def main():
+    # Remove leftovers from previous runs so a failed render can never reuse stale media.
+    for item in OUT_DIR.iterdir():
+        if item.is_dir():
+            shutil.rmtree(item)
+        else:
+            item.unlink()
+    ASSET_DIR.mkdir(parents=True, exist_ok=True)
+
     credits = []
     segment_files = []
 
