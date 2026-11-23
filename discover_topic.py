@@ -40,7 +40,7 @@ EVERGREEN = [
 
 ALLOW = re.compile(
     r"\b(space|planet|earth|moon|mars|nasa|astronomy|science|animal|wildlife|"
-    r"ocean|deep sea|nature|weather|climate|invention|technology|robot|"
+    r"ocean|deep sea|nature|invention|technology|robot|"
     r"artificial intelligence|\bai\b|discovery|physics|biology|human body|"
     r"brain|dinosaur|fossil|volcano|earthquake|aurora|solar|star|galaxy|"
     r"cat|octopus|bee|shark|tree|butterfly|penguin|dolphin|flamingo|black hole)\b",
@@ -49,7 +49,7 @@ ALLOW = re.compile(
 BLOCK = re.compile(
     r"\b(election|politic|president|war|weapon|murder|death|shooting|"
     r"crime|celebrity|scandal|adult|gambling|stock|crypto|betting|"
-    r"sports league|match result)\b",
+    r"sports league|match result|weather|forecast|temperature|climate|storm|hurricane|tornado|flood|drought|snow warning|heatwave|breaking news|news update|denver)\b",
     re.I,
 )
 
@@ -190,6 +190,9 @@ def main():
     selected = None
     for item, kind in ordered:
         topic = item["topic"]
+        if BLOCK.search(topic):
+            print(f"Skipping off-niche topic: {topic}")
+            continue
         try:
             extract, source_url, canonical_title = wikipedia_summary(topic)
         except Exception as exc:
