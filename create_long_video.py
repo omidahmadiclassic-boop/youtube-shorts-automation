@@ -18,7 +18,7 @@ def terms(s,n=4):
   if x not in stop and x not in out: out.append(x)
   if len(out)>=n: break
  return out
-def fetch_clip(query,idx):
+def fetch_clip(query,idx,used_ids):
  data=requests.get("https://pixabay.com/api/videos/",params={"key":KEY,"q":query,"video_type":"film","safesearch":"true","order":"popular","per_page":20},timeout=40).json()
  hits=data.get("hits",[])
  q=set(terms(query,8))
@@ -27,8 +27,10 @@ def fetch_clip(query,idx):
  for h in hits:
   tags=set(re.findall(r"[a-z][a-z-]{2,}",(h.get("tags") or "").lower()))
   if tags & blocked: continue
-  score=len(q & tags)
-  if score>=1: scored.append((score,h))
+  overlap=q & tags
+  score=len(overlap)
+  coverage=score/max(1,len(q))
+  if score>=2 and coverage>=0.30 and h.get('id') not in used_ids: scored.append((score,coverage,h))
  scored.sort(key=lambda z:(z[0],z[1].get("duration",0)>=15,z[1].get("downloads",0)),reverse=True)
  for _,h in scored:
   v=h.get("videos",{}); v=v.get("large") or v.get("medium") or v.get("small")
@@ -40,8 +42,8 @@ def fetch_clip(query,idx):
     for b in r.iter_content(1024*1024):
      if b:f.write(b)
   if p.stat().st_size>50000:
-   return p,{"query":query,"creator":h.get("user","Pixabay contributor"),"url":h.get("pageURL"),"id":h.get("id")}
- raise RuntimeError("No relevant Pixabay clip for "+query)
+   return p,{"query":query,"creator":h.get("user","Pixabay contributor"),"url":h.get("pageURL"),"id":h.get("id"),"matched_terms":score,"query_terms":len(q),"coverage":round(coverage,2)}
+ raise RuntimeError("No sufficiently relevant, unused Pixabay clip found for scene query: "+query+"; refusing unrelated fallback.")
 def main():
  if OUT.exists(): shutil.rmtree(OUT)
  ASSETS.mkdir(parents=True)
@@ -59,10 +61,12 @@ def main():
  run(["edge-tts","--voice",voice,"--rate=+0%","--text",SCRIPT,"--write-media",str(narration),"--write-subtitles",str(srt)])
  dur=float(subprocess.run(["ffprobe","-v","error","-show_entries","format=duration","-of","default=nw=1:nk=1",str(narration)],capture_output=True,text=True,check=True).stdout.strip())
  scene_sec=dur/12
- credits=[]; segments=[]
+ credits=[]; segments=[]; used_ids=set()
  for i,chunk in enumerate(chunks,1):
-  query=" ".join((terms(TITLE,3)+terms(chunk,5))[:7])
-  clip,credit=fetch_clip(query,i); credits.append(credit)
+  scene_terms=terms(chunk,7)
+  if len(scene_terms)<3: raise RuntimeError(f"Scene {i} has too little specific visual context; refusing generic footage.")
+  query=" ".join(scene_terms[:6])
+  clip,credit=fetch_clip(query,i,used_ids); used_ids.add(credit['id']); credits.append(credit)
   seg=ASSETS/f"segment_{i:02d}.mp4"; vf=f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps={FPS},setsar=1,format=yuv420p"
   run(["ffmpeg","-y","-loglevel","error","-stream_loop","-1","-i",str(clip),"-vf",vf,"-t",f"{scene_sec:.3f}","-an","-c:v","libx264","-preset","veryfast","-crf","22",str(seg)])
   segments.append(seg)
