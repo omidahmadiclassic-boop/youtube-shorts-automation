@@ -5,10 +5,10 @@ A zero-paid-API-cost YouTube Shorts workflow that runs on GitHub Actions cloud r
 ## Daily workflow
 
 - Runs daily at 13:23 UTC (14:23 in winter / 15:23 in summer in France and Germany), plus manual dispatch.
-- Checks Google Trends US for relevant science, nature, space, animal, and technology topics.
+- Checks Google Trends US for relevant science, nature, space, animal, and technology topics; rejects weather, forecasts, and general news.
 - Falls back to a rotating evergreen topic list when no suitable fresh trend has a reliable reference.
 - Uses Wikipedia article summaries as a factual research reference and records the selected topic to avoid exact repeats.
-- Creates a vertical Short using three scene-specific Pixabay footage searches, a randomly selected English Edge TTS neural voice, synchronized burned-in captions, FFmpeg, and channel graphics.
+- Creates a vertical Short using three scene-specific Pixabay footage searches, a randomly selected English Edge TTS neural voice, synchronized small bottom subtitles, FFmpeg, and a title card shown only in the opening scene.
 - Validates the finished MP4 before upload (portrait format, duration, video/audio streams, subtitles, and source credits); a failed check blocks publishing.
 - Records published topics and YouTube video IDs to reduce accidental duplicate uploads.
 - Builds a topic-specific YouTube title, relevant tags, and up to three hashtags; adds a viewer question and subscription prompt to the description.\n- Uploads the finished video publicly using the YouTube Data API.
@@ -45,7 +45,7 @@ Open **Actions → Curious World Daily Shorts → Run workflow**. Check the run 
 - Google Trends and Wikipedia can be unavailable or return unsuitable results. In that case the workflow uses an unused evergreen topic or stops rather than inventing facts.
 - Narration length determines scene pacing, and Edge TTS generates subtitle timing that is burned into the final Short. Scene searches are derived from individual research sentences.\n- A trend is not proof that a topic will get views. Titles, clips, and scripts still need periodic quality review. Hashtags and tags provide context but cannot guarantee views; viewer retention, the opening seconds, and topic/clip relevance matter much more.
 - Automatic public upload starts only after all YouTube OAuth secrets are configured.
-- Pixabay clips are selected by search relevance and popularity; review the included source credits and license before relying on any individual asset.
+- Pixabay clips are filtered by scene-tag overlap and rejected when their tags indicate news, screens, subtitles, logos, or other text-heavy content. Pixabay does not provide dependable frame-level text detection, so review the generated artifact and source credits before relying on an individual asset.
 - GitHub Actions scheduled runs can be delayed by GitHub and may be disabled after prolonged repository inactivity. Check the Actions tab if a scheduled run does not appear.
 
 ## Cost
