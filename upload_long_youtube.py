@@ -30,7 +30,7 @@ def main():
     title = re.sub(r"\s+", " ", topic.get("title", topic["topic"])).strip()[:100]
     credentials = Credentials(None, refresh_token=env["YOUTUBE_REFRESH_TOKEN"], token_uri="https://oauth2.googleapis.com/token", client_id=env["YOUTUBE_CLIENT_ID"], client_secret=env["YOUTUBE_CLIENT_SECRET"], scopes=SCOPES)
     youtube = build("youtube", "v3", credentials=credentials)
-    body = {"snippet": {"title": title, "description": desc[:5000], "tags": ["Curious World", "science", "education", "documentary", "explained"], "categoryId": "27", "defaultLanguage": "en"}, "status": {"privacyStatus": "public", "selfDeclaredMadeForKids": False}}
+    body = {"snippet": {"title": title, "description": desc[:5000], "tags": ["Curious World", "science", "education", "documentary", "explained"], "categoryId": "27", "defaultLanguage": "en"}, "status": {"privacyStatus": "public"}}
     req = youtube.videos().insert(part="snippet,status", body=body, media_body=MediaFileUpload(str(video), mimetype="video/mp4", resumable=True))
     result = req.execute()
     vid = result.get("id")
