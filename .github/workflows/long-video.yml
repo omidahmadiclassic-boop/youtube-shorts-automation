@@ -1,0 +1,51 @@
+name: Curious World Weekly Long Video
+
+on:
+  schedule:
+    - cron: "0 15 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: curious-world-weekly-long
+  cancel-in-progress: false
+
+jobs:
+  create-review-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install free production tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          python -m pip install --upgrade requests Pillow edge-tts
+      - name: Check syntax
+        run: python -m compileall -q discover_long_topic.py create_long_video.py validate_long_video.py
+      - name: Research a fresh long-form topic
+        run: python discover_long_topic.py
+      - name: Produce long-form video
+        env:
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+        run: python create_long_video.py
+      - name: Validate before review
+        run: python validate_long_video.py
+      - name: Save review package
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: curious-world-long-video-review
+          path: |
+            output/long/curious-world-long.mp4
+            output/long/thumbnail.jpg
+            output/long/script.txt
+            output/long/youtube-description.txt
+            output/long/video-credits.txt
+            output/long/narration.srt
+            long_topic.json
+          retention-days: 14
+          if-no-files-found: warn
