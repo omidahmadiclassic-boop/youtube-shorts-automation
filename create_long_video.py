@@ -62,10 +62,13 @@ def main():
  dur=float(subprocess.run(["ffprobe","-v","error","-show_entries","format=duration","-of","default=nw=1:nk=1",str(narration)],capture_output=True,text=True,check=True).stdout.strip())
  scene_sec=dur/12
  credits=[]; segments=[]; used_ids=set()
+ topic_terms=terms(TITLE,4)
  for i,chunk in enumerate(chunks,1):
   scene_terms=terms(chunk,7)
-  if len(scene_terms)<3: raise RuntimeError(f"Scene {i} has too little specific visual context; refusing generic footage.")
-  query=" ".join(scene_terms[:6])
+  if len(scene_terms)<2: raise RuntimeError(f"Scene {i} has too little specific visual context; refusing generic footage.")
+  # Keep every scene anchored to the documentary subject, while adding scene-specific nouns.
+  combined=list(dict.fromkeys(topic_terms+scene_terms))
+  query=" ".join(combined[:6])
   clip,credit=fetch_clip(query,i,used_ids); used_ids.add(credit['id']); credits.append(credit)
   seg=ASSETS/f"segment_{i:02d}.mp4"; vf=f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps={FPS},setsar=1,format=yuv420p"
   run(["ffmpeg","-y","-loglevel","error","-stream_loop","-1","-i",str(clip),"-vf",vf,"-t",f"{scene_sec:.3f}","-an","-c:v","libx264","-preset","veryfast","-crf","22",str(seg)])
