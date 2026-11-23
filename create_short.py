@@ -60,20 +60,21 @@ def get_pixabay_video(query, index, scene_seconds):
     if not hits:
         raise RuntimeError(f"No Pixabay videos found for query: {query}")
 
-    # Pixabay's API is tag-based, so rank returned clips by overlap with
-    # the scene-specific search terms before considering popularity/resolution.
-    query_terms = {
-        term.lower() for term in re.findall(r"[A-Za-z][A-Za-z-]{2,}", query)
-    }
+    # Pixabay exposes tags, not a reliable visual-content classifier.
+    query_terms = {term.lower() for term in re.findall(r"[A-Za-z][A-Za-z-]{2,}", query)}
+    blocked_tags = {"news", "breaking", "report", "reporter", "television", "tv",
+        "broadcast", "screen", "monitor", "subtitle", "subtitles", "caption",
+        "captions", "text", "typography", "logo", "watermark", "advertisement",
+        "commercial", "interface", "screenshot", "poster", "headline"}
     def relevance(hit):
-        tags = set(re.findall(
-            r"[A-Za-z][A-Za-z-]{2,}",
-            (hit.get("tags") or "").lower()
-        ))
+        raw_tags = (hit.get("tags") or "").lower()
+        tags = set(re.findall(r"[A-Za-z][A-Za-z-]{2,}", raw_tags))
+        if tags & blocked_tags:
+            return -1
         return len(query_terms & tags)
 
     ranked = [(relevance(hit), hit) for hit in hits]
-    ranked = [(score, hit) for score, hit in ranked if score >= 1]
+    ranked = [(score, hit) for score, hit in ranked if score >= 2]
     if not ranked:
         raise RuntimeError(
             f"Pixabay results did not match the scene keywords closely enough: {query}"
@@ -180,23 +181,33 @@ def main():
     for i, scene in enumerate(SCENES, start=1):
         clip, credit = get_pixabay_video(scene["query"], i, scene_seconds)
         credits.append(credit)
-        overlay = ASSET_DIR / f"overlay_{i:02d}.png"
-        make_title_card(overlay, TITLE, i)
         segment = ASSET_DIR / f"segment_{i:02d}.mp4"
-
-        # Crop to vertical 9:16, keep the video moving, and add original channel graphics.
-        run([
-            "ffmpeg", "-y", "-loglevel", "error",
-            "-stream_loop", "-1", "-i", str(clip),
-            "-loop", "1", "-i", str(overlay),
-            "-filter_complex",
-            f"[0:v]scale={W}:{H}:force_original_aspect_ratio=increase,"
-            f"crop={W}:{H},fps={FPS},setsar=1[base];"
-            f"[base][1:v]overlay=0:0:shortest=1,format=yuv420p[v]",
-            "-map", "[v]", "-t", str(scene_seconds),
-            "-an", "-c:v", "libx264", "-preset", "veryfast",
-            "-crf", "21", "-movflags", "+faststart", str(segment)
-        ])
+        base_filter = (
+            f"scale={W}:{H}:force_original_aspect_ratio=increase,"
+            f"crop={W}:{H},fps={FPS},setsar=1,format=yuv420p"
+        )
+        if i == 1:
+            overlay = ASSET_DIR / "opening_title.png"
+            make_title_card(overlay, TITLE, i)
+            run([
+                "ffmpeg", "-y", "-loglevel", "error",
+                "-stream_loop", "-1", "-i", str(clip),
+                "-loop", "1", "-i", str(overlay),
+                "-filter_complex",
+                f"[0:v]{base_filter}[base];"
+                f"[base][1:v]overlay=0:0:shortest=1,format=yuv420p[v]",
+                "-map", "[v]", "-t", str(scene_seconds),
+                "-an", "-c:v", "libx264", "-preset", "veryfast",
+                "-crf", "21", "-movflags", "+faststart", str(segment)
+            ])
+        else:
+            run([
+                "ffmpeg", "-y", "-loglevel", "error",
+                "-stream_loop", "-1", "-i", str(clip),
+                "-vf", base_filter, "-t", str(scene_seconds),
+                "-an", "-c:v", "libx264", "-preset", "veryfast",
+                "-crf", "21", "-movflags", "+faststart", str(segment)
+            ])
         segment_files.append(segment)
 
     concat_file = OUT_DIR / "concat.txt"
