@@ -31,8 +31,8 @@ def fetch_clip(query,idx,used_ids):
   score=len(overlap)
   coverage=score/max(1,len(q))
   if score>=2 and coverage>=0.30 and h.get('id') not in used_ids: scored.append((score,coverage,h))
- scored.sort(key=lambda z:(z[0],z[1].get("duration",0)>=15,z[1].get("downloads",0)),reverse=True)
- for _,h in scored:
+ scored.sort(key=lambda z:(z[0],z[1],z[2].get("duration",0)>=15,z[2].get("downloads",0)),reverse=True)
+ for score,coverage,h in scored:
   v=h.get("videos",{}); v=v.get("large") or v.get("medium") or v.get("small")
   if not v or not v.get("url"): continue
   p=ASSETS/f"clip_{idx:02d}.mp4"
@@ -81,7 +81,8 @@ def main():
  for line in lines:
   box=d.textbbox((0,0),line,font=font); d.text(((1280-(box[2]-box[0]))/2,y),line,font=font,fill="white",stroke_width=2,stroke_fill=(0,0,0)); y+=90
  d.text((50,640),"CURIOUS WORLD",font=ImageFont.truetype(FONT,30),fill=(130,210,255)); im.save(OUT/"thumbnail.jpg",quality=92)
- (OUT/"video-credits.txt").write_text("Research: "+topic["reference_url"]+"\nVisual footage: Pixabay Content License. Review individual asset terms.\n"+ "\n".join(f"{x['query']} | {x['creator']} | {x['url']} | {x['id']}" for x in credits),encoding="utf-8")
+ (OUT/"visual-match-report.json").write_text(json.dumps(credits,ensure_ascii=False,indent=2),encoding="utf-8")
+ (OUT/"video-credits.txt").write_text("Research: "+topic["reference_url"]+"\nVisual footage: Pixabay Content License. Review individual asset terms.\n"+ "\n".join(f"{x['query']} | matched {x['matched_terms']}/{x['query_terms']} | {x['creator']} | {x['url']} | {x['id']}" for x in credits),encoding="utf-8")
  (OUT/"youtube-description.txt").write_text(f"{TITLE}\n\nA researched Curious World story. Sources and footage credits are included in the accompanying credits file.\n\nWhat surprised you most? Share your thoughts below.\n\n#Science #CuriousWorld #Documentary",encoding="utf-8")
  print(f"Created {final}; narration {dur/60:.1f} minutes; {len(SCRIPT.split())} words; voice {voice}")
 if __name__=="__main__": main()
