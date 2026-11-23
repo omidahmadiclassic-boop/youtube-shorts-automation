@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: curious-world-weekly-long
@@ -23,7 +23,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg fonts-dejavu-core
-          python -m pip install --upgrade requests Pillow edge-tts
+          python -m pip install --upgrade requests Pillow edge-tts google-api-python-client google-auth
       - name: Check syntax
         run: python -m compileall -q discover_long_topic.py create_long_video.py validate_long_video.py
       - name: Research a fresh long-form topic
@@ -34,6 +34,21 @@ jobs:
         run: python create_long_video.py
       - name: Validate before review
         run: python validate_long_video.py
+      - name: Upload validated long video to YouTube automatically
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: python upload_long_youtube.py
+      - name: Save upload history
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add long_topic_history.json long_upload_history.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Record published Curious World long video"
+            git push
+          fi
       - name: Save review package
         if: always()
         uses: actions/upload-artifact@v4
@@ -45,6 +60,7 @@ jobs:
             output/long/script.txt
             output/long/youtube-description.txt
             output/long/video-credits.txt
+            output/long/visual-match-report.json
             output/long/narration.srt
             long_topic.json
           retention-days: 14
