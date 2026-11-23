@@ -12,7 +12,7 @@ TITLE=topic["title"]; SCRIPT=topic["script"]
 FONT="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 def run(cmd): subprocess.run(cmd,check=True)
 def terms(s,n=4):
- stop={"about","after","also","because","being","between","could","during","first","from","have","into","more","most","often","other","over","some","such","than","that","their","there","these","they","this","those","through","under","using","very","were","when","where","which","while","with","would","your","the","and","for","are","was","its","has","had","not","but","can","may","one","two","how","why","what"}
+ stop={"about","after","also","because","being","between","could","during","first","from","have","into","more","most","often","other","over","some","such","than","that","their","there","these","they","this","those","through","under","using","very","were","when","where","which","while","with","would","your","the","and","for","are","was","its","has","had","not","but","can","may","one","two","how","why","what","world","thought","understood","hiding","bigger","story","today","exploring","curious","we","our","you","see","why","subject","fascinating","appears","first"}
  out=[]
  for x in re.findall(r"[A-Za-z][A-Za-z-]{2,}",s.lower()):
   if x not in stop and x not in out: out.append(x)
