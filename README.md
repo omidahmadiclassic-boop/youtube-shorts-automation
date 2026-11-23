@@ -1,53 +1,43 @@
-# Curious World Daily Shorts Automation
+# Curious World YouTube Automation
 
-A zero-paid-API-cost YouTube Shorts workflow that runs on GitHub Actions cloud runners. Your home computer does not need to be on.
+This repository contains two separate workflows. They use free research sources, Pixabay footage, Edge TTS, FFmpeg, and GitHub Actions. No paid LLM or paid video-rendering API is required.
 
-## Daily workflow
+## Daily Shorts
+- Runs daily at 13:23 UTC, plus manual dispatch.
+- Researches science, nature, space, animals, and technology; filters weather and general news.
+- Produces a vertical Short with scene-specific Pixabay searches, English Edge TTS narration, and small bottom subtitles.
+- Adds topic-specific title, description, tags, and hashtags; validates the MP4 before upload.
+- Uploads publicly using the configured YouTube OAuth secrets and records duplicate history.
 
-- Runs daily at 13:23 UTC (14:23 in winter / 15:23 in summer in France and Germany), plus manual dispatch.
-- Checks Google Trends US for relevant science, nature, space, animal, and technology topics; rejects weather, forecasts, and general news.
-- Falls back to a rotating evergreen topic list when no suitable fresh trend has a reliable reference.
-- Uses Wikipedia article summaries as a factual research reference and records the selected topic to avoid exact repeats.
-- Creates a vertical Short using three scene-specific Pixabay footage searches, a randomly selected English Edge TTS neural voice, synchronized small bottom subtitles, FFmpeg, and a title card shown only in the opening scene.
-- Validates the finished MP4 before upload (portrait format, duration, video/audio streams, subtitles, and source credits); a failed check blocks publishing.
-- Records published topics and YouTube video IDs to reduce accidental duplicate uploads.
-- Builds a topic-specific YouTube title, relevant tags, and up to three hashtags; adds a viewer question and subscription prompt to the description.\n- Uploads the finished video publicly using the YouTube Data API.
-- Saves the MP4, credits, description, and selected topic as a seven-day workflow artifact.
+## Weekly long-form video (new pilot workflow)
+- Runs every Sunday at 15:00 UTC, plus manual dispatch.
+- Chooses a fresh topic from a curated evergreen list and retrieves a supporting English Wikipedia article extract.
+- Builds a researched narration from the source text, divides it into 12 visual sections, searches Pixabay for relevant footage, and produces a 16:9 H.264/AAC video with synchronized subtitles.
+- Produces a separate 1280x720 thumbnail, script, description, and footage/source credits.
+- Validates the result (4–15 minute duration, landscape video, audio/video streams, subtitles, thumbnail, and credits).
+- Uploads a 14-day review artifact. **It does not publish long-form videos automatically.** Review the first outputs for factual accuracy, narration quality, visual relevance, and audience suitability before enabling public upload.
 
 ## Required GitHub Actions secrets
-
-The topic research and voice generation do not need paid AI API keys. Pixabay and YouTube credentials are needed for footage and publishing:
-
 - `PIXABAY_API_KEY`
 - `YOUTUBE_CLIENT_ID`
 - `YOUTUBE_CLIENT_SECRET`
 - `YOUTUBE_REFRESH_TOKEN`
 
-Add them under repository **Settings → Secrets and variables → Actions → New repository secret**.
+Add them under repository **Settings → Secrets and variables → Actions**. The long-form review workflow needs only `PIXABAY_API_KEY`; the Shorts upload workflow uses the YouTube OAuth secrets.
 
-### YouTube upload setup
+## Testing
+- Shorts: **Actions → Curious World Daily Shorts → Run workflow**.
+- Long-form pilot: **Actions → Curious World Weekly Long Video → Run workflow**.
+- Open the successful run and download its artifact named `curious-world-long-video-review`. Review the MP4 and thumbnail before publishing.
 
-1. In Google Cloud Console, create or select a project and enable **YouTube Data API v3**.
-2. Configure the OAuth consent screen and create an OAuth client ID of type **Desktop app**.
-3. Authorize the YouTube channel with the scope `https://www.googleapis.com/auth/youtube.upload` and obtain a refresh token for that OAuth client.
-4. Save the OAuth client ID, client secret, and refresh token as the three GitHub secrets above.
-5. In YouTube Studio, set the channel's audience and upload defaults correctly before enabling public automatic publishing.
-
-Do not put OAuth credentials or refresh tokens in repository files or commit them.
-
-## Manual test
-
-Open **Actions → Curious World Daily Shorts → Run workflow**. Check the run logs and the `curious-world-short` artifact.
-
-## Important limitations
-
-- Topic selection is a free research-and-ranking pipeline with reusable script templates; it does not call a paid generative-AI model or claim to measure YouTube view counts.
-- Google Trends and Wikipedia can be unavailable or return unsuitable results. In that case the workflow uses an unused evergreen topic or stops rather than inventing facts.
-- Narration length determines scene pacing, and Edge TTS generates subtitle timing that is burned into the final Short. Scene searches are derived from individual research sentences.\n- A trend is not proof that a topic will get views. Titles, clips, and scripts still need periodic quality review. Hashtags and tags provide context but cannot guarantee views; viewer retention, the opening seconds, and topic/clip relevance matter much more.
-- Automatic public upload starts only after all YouTube OAuth secrets are configured.
-- Pixabay clips are filtered by scene-tag overlap and rejected when their tags indicate news, screens, subtitles, logos, or other text-heavy content. Pixabay does not provide dependable frame-level text detection, so review the generated artifact and source credits before relying on an individual asset.
-- GitHub Actions scheduled runs can be delayed by GitHub and may be disabled after prolonged repository inactivity. Check the Actions tab if a scheduled run does not appear.
+## Important quality and monetization notes
+- A video workflow cannot guarantee views, full watch-through, or monetization approval.
+- Long-form narration is based on the retrieved source article, not an AI fact-checking or editorial model. Check the script against its cited source before publishing.
+- Pixabay search tags are only a relevance signal. They do not provide frame-level visual understanding or reliable detection of text embedded in footage. Inspect the rendered video.
+- The first long-form version uses stock footage and narration. To strengthen originality and viewer retention, review the edit, add meaningful original explanation and visual storytelling, and avoid repetitive templated uploads.
+- Check YouTube Analytics audience-retention graphs after publication. Improve the opening, pacing, and sections where viewers leave.
+- Correctly set the channel's audience (made for kids or not) based on the actual content. Do not choose an audience setting merely to gain features.
+- Public long-form auto-upload is intentionally not enabled until the first review outputs pass a human quality check.
 
 ## Cost
-
-The workflow is designed around GitHub Actions, Google Trends RSS, Wikipedia summaries, Pixabay's API/free footage, Edge TTS, and FFmpeg. It does not require a paid LLM or paid video-rendering API. Free service limits and terms apply.
+The workflows use GitHub Actions, public Wikipedia endpoints, Pixabay API/free footage, Edge TTS, and FFmpeg. Free-tier limits, licensing terms, and service availability apply.
