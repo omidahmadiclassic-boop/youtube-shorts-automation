@@ -42,8 +42,8 @@ def main():
     sentences=re.split(r"(?<=[.!?])\s+",extract)
     sentences=[x.strip() for x in sentences if len(x.strip())>45]
     # Use a curated factual passage, not fabricated filler. Target about 650-850 spoken words.
-    body=" ".join(sentences[:42])
-    if len(body)<2400: continue
+    body=" ".join(sentences[:75])
+    if len(body)<4000: continue
     intro=f"What if the world we thought we understood was hiding a much bigger story? Today on Curious World, we're exploring {topic.lower()}. And by the end, you'll see why this subject is far more fascinating than it first appears."
     outro="So the next time you look at this part of our world, remember how much is still waiting to be discovered. Which detail surprised you most? Share it in the comments, and subscribe to Curious World for more carefully researched stories."
     script= intro+" "+body+" "+outro
