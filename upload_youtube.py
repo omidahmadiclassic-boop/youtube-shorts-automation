@@ -123,6 +123,7 @@ def main():
         },
         "status": {
             "privacyStatus": "public",
+            "selfDeclaredMadeForKids": False,
         },
     }
     print(f"YouTube title: {title}")
