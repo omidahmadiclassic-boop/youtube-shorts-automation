@@ -27,7 +27,7 @@ def main():
 
     # Reject caption files that regress to dense paragraph overlays.
     subtitle_text = SUBTITLES.read_text(encoding="utf-8-sig")
-    cue_blocks = [block for block in subtitle_text.strip().split("\\n\\n") if block.strip()]
+    cue_blocks = [block for block in subtitle_text.strip().split("\n\n") if block.strip()]
     if not cue_blocks:
         fail("Subtitle file contains no timed captions.")
     for cue in cue_blocks:
