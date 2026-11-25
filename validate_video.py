@@ -25,6 +25,22 @@ def main():
     if CREDITS.stat().st_size < 50:
         fail("Footage credits file is empty or too short.")
 
+    # Reject caption files that regress to dense paragraph overlays.
+    subtitle_text = SUBTITLES.read_text(encoding="utf-8-sig")
+    cue_blocks = [block for block in subtitle_text.strip().split("\\n\\n") if block.strip()]
+    if not cue_blocks:
+        fail("Subtitle file contains no timed captions.")
+    for cue in cue_blocks:
+        lines = cue.splitlines()
+        time_index = next((i for i, line in enumerate(lines) if "-->" in line), None)
+        if time_index is None:
+            fail("Subtitle cue has no valid timestamp.")
+        caption_lines = [line for line in lines[time_index + 1:] if line.strip()]
+        if len(caption_lines) > 2:
+            fail("A subtitle cue contains more than two lines; refusing dense text overlays.")
+        if any(len(line) > 44 for line in caption_lines):
+            fail("A subtitle line is too long; refusing hard-to-read captions.")
+
     result = subprocess.run(
         [
             "ffprobe", "-v", "error", "-show_entries",
