@@ -77,6 +77,11 @@ def get_pixabay_video(query, index, scene_seconds, used_ids):
         "captions", "text", "typography", "logo", "watermark", "advertisement",
         "commercial", "interface", "screenshot", "poster", "headline",
     }
+    topic_tokens = re.findall(r"[A-Za-z][A-Za-z-]{2,}", (TITLE + " " + TOPIC.get("topic", "")).lower())
+    anchor_terms = {singular.get(t, t) for t in topic_tokens if t not in stop_words}
+    if not anchor_terms:
+        anchor_terms = set(normalized_core[:2])
+
     candidates = {}
     for search_query in variants:
         params = {
@@ -102,13 +107,14 @@ def get_pixabay_video(query, index, scene_seconds, used_ids):
             tags = {singular.get(t, t) for t in tags}
             if tags & blocked_tags:
                 continue
-            overlap = len(search_terms & tags)
-            minimum = 1 if len(search_terms) <= 2 else 2
-            if overlap < minimum:
+            anchor_overlap = len(anchor_terms & tags)
+            scene_overlap = len((search_terms - anchor_terms) & tags)
+            # Refuse clips that do not match the actual topic.
+            if anchor_overlap < 1:
                 continue
-            score = overlap * 10
-            if normalized_core and normalized_core[0] in tags:
-                score += 8
+            score = anchor_overlap * 18 + scene_overlap * 6
+            if scene_overlap:
+                score += 5
             videos = hit.get("videos", {})
             variant = videos.get("large") or videos.get("medium") or videos.get("small")
             if variant and variant.get("url"):
@@ -170,6 +176,52 @@ def make_title_card(path, caption, number):
     d.text((650, 40), f"{number}/3", font=small, fill=(230, 245, 255, 235))
     im.save(path)
 
+def reflow_subtitles(source, destination, max_chars=36):
+    """Keep captions readable: at most two short lines per timed cue."""
+    import textwrap
+    import re
+
+    def to_ms(value):
+        h, m, rest = value.split(":")
+        s, ms = rest.split(",")
+        return ((int(h) * 60 + int(m)) * 60 + int(s)) * 1000 + int(ms)
+
+    def stamp(value):
+        value = max(0, int(value))
+        h, rem = divmod(value, 3600000)
+        m, rem = divmod(rem, 60000)
+        s, ms = divmod(rem, 1000)
+        return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+    raw = source.read_text(encoding="utf-8-sig")
+    blocks = re.split(r"\r?\n\s*\r?\n", raw.strip())
+    output = []
+    cue_number = 1
+    for block in blocks:
+        lines = block.splitlines()
+        time_index = next((i for i, line in enumerate(lines) if "-->" in line), None)
+        if time_index is None:
+            continue
+        match = re.search(r"(\d{2}:\d{2}:\d{2},\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2},\d{3})", lines[time_index])
+        if not match:
+            continue
+        start, end = map(to_ms, match.groups())
+        caption = re.sub(r"<[^>]+>", "", " ".join(lines[time_index + 1:])).strip()
+        if not caption:
+            continue
+        wrapped = textwrap.wrap(caption, width=max_chars, break_long_words=False, break_on_hyphens=False) or [caption]
+        groups = [wrapped[i:i + 2] for i in range(0, len(wrapped), 2)]
+        duration = max(1, end - start)
+        for i, group in enumerate(groups):
+            cue_start = start + duration * i // len(groups)
+            cue_end = start + duration * (i + 1) // len(groups)
+            output.append(f"{cue_number}\n{stamp(cue_start)} --> {stamp(cue_end)}\n" + "\n".join(group))
+            cue_number += 1
+    if not output:
+        raise RuntimeError("Could not parse Edge TTS subtitles; refusing to publish without readable captions.")
+    destination.write_text("\n\n".join(output) + "\n", encoding="utf-8")
+
+
 def main():
     # Remove leftovers from previous runs so a failed render can never reuse stale media.
     for item in OUT_DIR.iterdir():
@@ -212,6 +264,7 @@ def main():
         check=True, capture_output=True, text=True
     )
     narration_seconds = float(probe.stdout.strip())
+    reflow_subtitles(subtitles_file, subtitles_file, max_chars=36)
     scene_seconds = max(8, narration_seconds / max(1, len(SCENES)) + 0.6)
     print(f"Narration: {narration_seconds:.1f}s; scene pacing: {scene_seconds:.1f}s.")
 
@@ -271,7 +324,7 @@ def main():
         "loudnorm=I=-16:TP=-1.5:LRA=11,"
         f"afade=t=in:st=0:d=0.18,afade=t=out:st={fade_start:.2f}:d=2[a]",
         "-map", "0:v:0", "-map", "[a]",
-        "-vf", "subtitles=output/narration.srt:force_style='FontName=DejaVu Sans,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginV=105'",
+        "-vf", "subtitles=output/narration.srt:force_style='FontName=DejaVu Sans,FontSize=15,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginV=90'",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
         "-c:a", "aac", "-b:a", "192k",
         "-shortest", "-movflags", "+faststart",
