@@ -101,7 +101,13 @@ def main():
   box=d.textbbox((0,0),line,font=font); d.text(((1280-(box[2]-box[0]))/2,y),line,font=font,fill="white",stroke_width=2,stroke_fill=(0,0,0)); y+=90
  d.text((50,640),"CURIOUS WORLD",font=ImageFont.truetype(FONT,30),fill=(130,210,255)); im.save(OUT/"thumbnail.jpg",quality=92)
  (OUT/"visual-match-report.json").write_text(json.dumps(credits,ensure_ascii=False,indent=2),encoding="utf-8")
- (OUT/"video-credits.txt").write_text("Research: "+topic["reference_url"]+"\nVisual footage: Pixabay Content License. Review individual asset terms.\n"+ "\n".join(f"{x['query']} | matched {x['matched_terms']}/{x['query_terms']} | {x['creator']} | {x['url']} | {x['id']}" for x in credits),encoding="utf-8")
+ (OUT/"video-credits.txt").write_text(
+  "Research: "+topic["reference_url"]+"\nVisual footage: Pixabay Content License. Review individual asset terms.\n"+
+  "\n".join(
+   f"{x['query']} | anchor matches {x['matched_anchor_terms']} | scene matches {x['matched_scene_terms']} | score {x['relevance_score']} | {x['creator']} | {x['url']} | {x['id']}"
+   for x in credits
+  ),encoding="utf-8"
+ )
  (OUT/"youtube-description.txt").write_text(f"{TITLE}\n\nA researched Curious World story. Sources and footage credits are included in the accompanying credits file.\n\nWhat surprised you most? Share your thoughts below.\n\n#Science #CuriousWorld #Documentary",encoding="utf-8")
  print(f"Created {final}; narration {dur/60:.1f} minutes; {len(SCRIPT.split())} words; voice {voice}")
 if __name__=="__main__": main()
