@@ -36,8 +36,15 @@ def make_metadata(topic, description):
     for keyword, additions in TOPIC_TAGS.items():
         if keyword in haystack:
             tags.extend(additions)
+    # Keep meaningful topic terms; generic question words add noise and do not help discovery.
+    tag_stop_words = {
+        "why", "how", "what", "when", "where", "which", "who", "does",
+        "do", "are", "is", "was", "were", "the", "and", "for", "with",
+        "from", "into", "some", "always", "their", "they", "have", "has",
+        "been", "about", "that", "this", "your", "you", "its",
+    }
     words = re.findall(r"[A-Za-z][A-Za-z0-9-]{2,}", raw_topic)
-    tags.extend(words)
+    tags.extend(word for word in words if word.casefold() not in tag_stop_words)
     # YouTube tags are metadata, not a keyword dump: deduplicate and cap.
     unique_tags = []
     seen = set()
