@@ -38,64 +38,95 @@ FONT_REG = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 def run(cmd):
     subprocess.run(cmd, check=True)
 
-def get_pixabay_video(query, index, scene_seconds):
-    # One API request per scene; do not loop or mass-download search results.
-    params = {
-        "key": API_KEY,
-        "q": query,
-        "video_type": "film",
-        "safesearch": "true",
-        "order": "popular",
-        "per_page": 10,
+def get_pixabay_video(query, index, scene_seconds, used_ids):
+    # Search detailed phrases first, then concise subject terms because Pixabay tags vary.
+    stop_words = {
+        "about", "after", "also", "because", "being", "between", "could",
+        "during", "first", "from", "have", "into", "more", "most", "often",
+        "other", "over", "some", "such", "than", "that", "their", "there",
+        "these", "they", "this", "those", "through", "under", "using", "very",
+        "were", "when", "where", "which", "while", "with", "would", "your",
+        "the", "and", "for", "are", "was", "its", "has", "had", "not", "but",
+        "can", "may", "one", "two", "how", "why", "survive", "extreme",
+        "group", "flightless", "semi-aquatic", "science", "behind", "world",
+        "makes", "make", "always", "land", "transform", "communicate",
     }
-    response = requests.get(
-        "https://pixabay.com/api/videos/",
-        params=params,
-        timeout=45,
-        headers={"User-Agent": "CuriousWorldShorts/1.0"},
-    )
-    response.raise_for_status()
-    data = response.json()
-    hits = data.get("hits", [])
-    if not hits:
-        raise RuntimeError(f"No Pixabay videos found for query: {query}")
+    singular = {
+        "penguins": "penguin", "butterflies": "butterfly",
+        "flamingos": "flamingo", "bees": "bee", "octopuses": "octopus",
+        "sharks": "shark", "trees": "tree", "cats": "cat",
+        "astronauts": "astronaut", "planets": "planet",
+        "galaxies": "galaxy", "stars": "star", "dolphins": "dolphin",
+        "holes": "hole", "rings": "ring", "moons": "moon",
+    }
+    tokens = re.findall(r"[A-Za-z][A-Za-z-]{2,}", query.lower())
+    core = list(dict.fromkeys(t for t in tokens if t not in stop_words))
+    normalized_core = list(dict.fromkeys(singular.get(t, t) for t in core))
+    variants = []
+    for candidate in (query, " ".join(core), " ".join(normalized_core)):
+        candidate = re.sub(r"\s+", " ", candidate).strip()
+        if candidate and candidate.casefold() not in {x.casefold() for x in variants}:
+            variants.append(candidate)
+    for term in normalized_core:
+        if term.casefold() not in {x.casefold() for x in variants}:
+            variants.append(term)
 
-    # Pixabay exposes tags, not a reliable visual-content classifier.
-    query_terms = {term.lower() for term in re.findall(r"[A-Za-z][A-Za-z-]{2,}", query)}
-    blocked_tags = {"news", "breaking", "report", "reporter", "television", "tv",
+    blocked_tags = {
+        "news", "breaking", "report", "reporter", "television", "tv",
         "broadcast", "screen", "monitor", "subtitle", "subtitles", "caption",
         "captions", "text", "typography", "logo", "watermark", "advertisement",
-        "commercial", "interface", "screenshot", "poster", "headline"}
-    def relevance(hit):
-        raw_tags = (hit.get("tags") or "").lower()
-        tags = set(re.findall(r"[A-Za-z][A-Za-z-]{2,}", raw_tags))
-        if tags & blocked_tags:
-            return -1
-        return len(query_terms & tags)
+        "commercial", "interface", "screenshot", "poster", "headline",
+    }
+    candidates = {}
+    for search_query in variants:
+        params = {
+            "key": API_KEY, "q": search_query, "video_type": "film",
+            "safesearch": "true", "order": "popular", "per_page": 50,
+        }
+        response = requests.get(
+            "https://pixabay.com/api/videos/", params=params, timeout=45,
+            headers={"User-Agent": "CuriousWorldShorts/1.0"},
+        )
+        response.raise_for_status()
+        hits = response.json().get("hits", [])
+        print(f"Pixabay search {search_query!r}: {len(hits)} results.")
+        search_terms = {
+            singular.get(t, t) for t in
+            re.findall(r"[A-Za-z][A-Za-z-]{2,}", search_query.lower())
+        }
+        for hit in hits:
+            asset_id = str(hit.get("id", ""))
+            if not asset_id or asset_id in used_ids:
+                continue
+            tags = set(re.findall(r"[A-Za-z][A-Za-z-]{2,}", (hit.get("tags") or "").lower()))
+            tags = {singular.get(t, t) for t in tags}
+            if tags & blocked_tags:
+                continue
+            overlap = len(search_terms & tags)
+            minimum = 1 if len(search_terms) <= 2 else 2
+            if overlap < minimum:
+                continue
+            score = overlap * 10
+            if normalized_core and normalized_core[0] in tags:
+                score += 8
+            videos = hit.get("videos", {})
+            variant = videos.get("large") or videos.get("medium") or videos.get("small")
+            if variant and variant.get("url"):
+                candidates[asset_id] = (score, hit, variant, search_query)
 
-    ranked = [(relevance(hit), hit) for hit in hits]
-    ranked = [(score, hit) for score, hit in ranked if score >= 2]
-    if not ranked:
-        raise RuntimeError(
-            f"Pixabay results did not match the scene keywords closely enough: {query}"
-        )
-    candidates = [
-        hit for _, hit in sorted(
-            ranked,
-            key=lambda pair: (
-                pair[0],
-                pair[1].get("duration", 0) >= scene_seconds,
-                pair[1].get("videos", {}).get("large", {}).get("width", 0),
-                pair[1].get("downloads", 0),
-            ),
-            reverse=True,
-        )
-    ]
-    for hit in candidates:
-        variants = hit.get("videos", {})
-        variant = variants.get("large") or variants.get("medium") or variants.get("small")
-        if variant and variant.get("url"):
-            target = ASSET_DIR / f"scene_{index:02d}.mp4"
+    ranked = sorted(
+        candidates.values(),
+        key=lambda item: (
+            item[0],
+            item[1].get("duration", 0) >= scene_seconds,
+            item[1].get("videos", {}).get("large", {}).get("width", 0),
+            item[1].get("downloads", 0),
+        ),
+        reverse=True,
+    )
+    for score, hit, variant, used_query in ranked:
+        target = ASSET_DIR / f"scene_{index:02d}.mp4"
+        try:
             with requests.get(variant["url"], stream=True, timeout=90) as r:
                 r.raise_for_status()
                 with target.open("wb") as f:
@@ -103,14 +134,19 @@ def get_pixabay_video(query, index, scene_seconds):
                         if chunk:
                             f.write(chunk)
             if target.stat().st_size > 50_000:
+                used_ids.add(str(hit.get("id")))
                 return target, {
-                    "id": hit.get("id"),
-                    "pageURL": hit.get("pageURL"),
+                    "id": hit.get("id"), "pageURL": hit.get("pageURL"),
                     "creator": hit.get("user", "Pixabay contributor"),
-                    "query": query,
+                    "query": used_query,
                 }
             target.unlink(missing_ok=True)
-    raise RuntimeError(f"Pixabay returned no downloadable video for: {query}")
+        except requests.RequestException as exc:
+            print(f"Could not download Pixabay asset {hit.get('id')}: {exc}")
+            target.unlink(missing_ok=True)
+    raise RuntimeError(
+        f"No relevant, unused Pixabay clip found after fallback searches for: {query}"
+    )
 
 def make_title_card(path, caption, number):
     im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
@@ -145,6 +181,7 @@ def main():
 
     credits = []
     segment_files = []
+    used_clip_ids = set()
 
     # Generate the narration first so the visual pacing follows the actual speech.
     narration_file = OUT_DIR / "narration.mp3"
@@ -179,7 +216,7 @@ def main():
     print(f"Narration: {narration_seconds:.1f}s; scene pacing: {scene_seconds:.1f}s.")
 
     for i, scene in enumerate(SCENES, start=1):
-        clip, credit = get_pixabay_video(scene["query"], i, scene_seconds)
+        clip, credit = get_pixabay_video(scene["query"], i, scene_seconds, used_clip_ids)
         credits.append(credit)
         segment = ASSET_DIR / f"segment_{i:02d}.mp4"
         base_filter = (
@@ -195,7 +232,7 @@ def main():
                 "-loop", "1", "-i", str(overlay),
                 "-filter_complex",
                 f"[0:v]{base_filter}[base];"
-                f"[base][1:v]overlay=0:0:shortest=1,format=yuv420p[v]",
+                f"[base][1:v]overlay=0:0:enable='between(t,0,2.8)':shortest=1,format=yuv420p[v]",
                 "-map", "[v]", "-t", str(scene_seconds),
                 "-an", "-c:v", "libx264", "-preset", "veryfast",
                 "-crf", "21", "-movflags", "+faststart", str(segment)
@@ -234,7 +271,7 @@ def main():
         "loudnorm=I=-16:TP=-1.5:LRA=11,"
         f"afade=t=in:st=0:d=0.18,afade=t=out:st={fade_start:.2f}:d=2[a]",
         "-map", "0:v:0", "-map", "[a]",
-        "-vf", "subtitles=output/narration.srt:force_style='FontName=DejaVu Sans,FontSize=14,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginV=65'",
+        "-vf", "subtitles=output/narration.srt:force_style='FontName=DejaVu Sans,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginV=105'",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
         "-c:a", "aac", "-b:a", "192k",
         "-shortest", "-movflags", "+faststart",
