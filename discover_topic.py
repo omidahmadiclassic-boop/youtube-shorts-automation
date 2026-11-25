@@ -94,16 +94,30 @@ def wikipedia_summary(topic):
         },
     )
     results = search_data.get("query", {}).get("search", [])
+    topic_words = {
+        word for word in re.findall(r"[a-z]{3,}", topic.casefold())
+        if word not in {"why", "how", "what", "the", "some", "are", "has", "have", "does", "with", "from", "into", "your"}
+    }
+    ranked_results = []
     for result in results:
         page_title = result.get("title", "").strip()
-        if not page_title:
-            continue
+        if page_title:
+            title_words = set(re.findall(r"[a-z]{3,}", page_title.casefold()))
+            ranked_results.append((len(topic_words & title_words), result))
+    ranked_results.sort(key=lambda item: item[0], reverse=True)
+    for title_match_count, result in ranked_results:
+        page_title = result.get("title", "").strip()
         try:
             data = request_json(
                 "https://en.wikipedia.org/api/rest_v1/page/summary/" + quote(page_title.replace(" ", "_"))
             )
             extract = re.sub(r"\s+", " ", data.get("extract", "")).strip()
-            if len(extract) >= 180 and data.get("type") != "disambiguation":
+            extract_words = set(re.findall(r"[a-z]{3,}", extract.casefold()))
+            if (
+                len(extract) >= 180
+                and data.get("type") != "disambiguation"
+                and (title_match_count > 0 or bool(topic_words & extract_words))
+            ):
                 page_url = (
                     data.get("content_urls", {}).get("desktop", {}).get("page")
                     or "https://en.wikipedia.org/wiki/" + quote(page_title.replace(" ", "_"))
