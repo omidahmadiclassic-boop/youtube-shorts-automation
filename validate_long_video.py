@@ -13,7 +13,9 @@ ids=[str(x.get("id")) for x in matches]
 if len(set(ids))!=12:
     raise SystemExit("Repeated Pixabay clip detected; refusing upload.")
 for i,item in enumerate(matches,1):
-    if item.get("matched_terms",0)<2 or item.get("coverage",0)<0.30 or not item.get("url"):
+    # Match the fields actually emitted by create_long_video.py.
+    # Every accepted clip must match at least one topic anchor and score >= 2.
+    if item.get("matched_anchor_terms",0)<1 or item.get("relevance_score",0)<2 or not item.get("url"):
         raise SystemExit(f"Scene {i} failed visual relevance threshold.")
 data=json.loads(subprocess.run(["ffprobe","-v","error","-show_streams","-show_format","-of","json",str(video)],capture_output=True,text=True,check=True).stdout)
 duration=float(data["format"]["duration"])
